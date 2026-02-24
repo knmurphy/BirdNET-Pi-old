@@ -5,6 +5,26 @@ if [ "$EUID" == 0 ]
   exit
 fi
 
+if [ "$(uname -m)" != "aarch64" ] && [ "$(uname -m)" != "x86_64" ];then
+  echo "BirdNET-Pi requires a 64-bit OS.
+It looks like your operating system is using $(uname -m),
+but would need to be aarch64."
+  exit 1
+fi
+
+PY_VERSION=$(python3 -c "import sys; print(f'{sys.version_info[0]}{sys.version_info[1]}')")
+if [ "${PY_VERSION}" == "39" ] ;then
+  echo "### BirdNET-Pi requires a newer OS. Bullseye is deprecated, please use Bookworm. ###"
+  [ -z "${FORCE_BULLSEYE}" ] && exit
+fi
+
+# we require passwordless sudo
+sudo -K
+if ! sudo -n true; then
+    echo "Passwordless sudo is not working. Aborting"
+    exit
+fi
+
 # Simple new installer
 HOME=$HOME
 USER=$USER
@@ -24,7 +44,7 @@ if [[ ! -z $PACKAGES_MISSING ]] ; then
 fi
 
 branch=main
-git clone -b $branch --depth=1 https://github.com/knmurphy/BirdNET-Pi.git ${HOME}/BirdNET-Pi &&
+git clone -b $branch --depth=1 https://github.com/Nachtzuster/BirdNET-Pi.git ${HOME}/BirdNET-Pi &&
 
 $HOME/BirdNET-Pi/scripts/install_birdnet.sh
 if [ ${PIPESTATUS[0]} -eq 0 ];then
