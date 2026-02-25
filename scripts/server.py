@@ -14,7 +14,6 @@ import threading
 import os
 
 from utils.notifications import sendAppriseNotifications
-from utils.parse_settings import config_to_settings
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 os.environ['CUDA_VISIBLE_DEVICES'] = ''
@@ -482,20 +481,20 @@ def handle_client(conn, addr):
 
                                 # Apprise of detection if not already alerted this run.
                                 if not entry[0] in species_apprised_this_run:
-                                    settings_dict = config_to_settings(userDir + '/BirdNET-Pi/scripts/thisrun.txt')
-                                    sendAppriseNotifications(species,
-                                                             str(score),
-                                                             File_Name,
-                                                             Date,
-                                                             Time,
-                                                             Week,
-                                                             Lat,
-                                                             Lon,
-                                                             Cutoff,
-                                                             Sens,
-                                                             Overlap,
-                                                             settings_dict,
-                                                             DB_PATH)
+                                    sendAppriseNotifications(
+                                        sci_name=Sci_Name,
+                                        com_name=Com_Name,
+                                        confidence=str(score),
+                                        confidencepct=Confidence,
+                                        path=File_Name,
+                                        date=Date,
+                                        time_of_day=Time,
+                                        week=Week,
+                                        latitude=Lat,
+                                        longitude=Lon,
+                                        cutoff=Cutoff,
+                                        sens=Sens,
+                                        overlap=Overlap)
                                     species_apprised_this_run.append(entry[0])
 
                                 print(str(current_date) +
