@@ -59,6 +59,21 @@ class TestDatabase:
         count = get_today_species_count()
         assert isinstance(count, int)
         assert count >= 0
+        assert count >= 0
+
+    def test_get_total_detection_count(self):
+        """Should query total detection count (all time) from database."""
+        from homepage.web_app import get_total_detection_count
+        count = get_total_detection_count()
+        assert isinstance(count, int)
+        assert count >= 0
+
+    def test_get_total_species_count(self):
+        """Should query count of distinct species (all time) from database."""
+        from homepage.web_app import get_total_species_count
+        count = get_total_species_count()
+        assert isinstance(count, int)
+        assert count >= 0
 
 
 class TestDashboardWidgets:
