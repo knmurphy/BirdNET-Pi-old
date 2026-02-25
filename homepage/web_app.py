@@ -251,16 +251,36 @@ def _dashboard_content():
 
     widgets = [
         H2("Dashboard"),
-        Div(f"Today's Detections: {today_count}"),
-        Div(f"Today's Species: {species_count}"),
+        Div(
+            Div("Today's Detections", cls="widget-label"),
+            Div(str(today_count), cls="widget-value"),
+            cls="widget"
+        ),
+        Div(
+            Div("Today's Species", cls="widget-label"),
+            Div(str(species_count), cls="widget-value"),
+            cls="widget"
+        ),
     ]
 
     if latest:
-        widgets.append(Div(f"Latest: {latest['Com_Name']} ({latest['Time']})"))
+        widgets.append(
+            Div(
+                Div("Latest Detection", cls="widget-label"),
+                Div(f"{latest['Com_Name']} ({latest['Time']})", cls="widget-value"),
+                cls="widget"
+            )
+        )
     else:
-        widgets.append(Div("Latest: No detections yet"))
+        widgets.append(
+            Div(
+                Div("Latest Detection", cls="widget-label"),
+                Div("No detections yet", cls="widget-value"),
+                cls="widget"
+            )
+        )
 
-    return Div(*widgets)
+    return Div(*widgets, cls="widget-grid")
 
 
 def _shell(content, current_path: str = "/app/dashboard"):

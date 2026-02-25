@@ -88,6 +88,14 @@ class TestDashboardWidgets:
         assert "Latest" in content or "latest" in content
 
 
+    def test_dashboard_uses_widget_classes(self):
+        """Dashboard should use .widget class for styling."""
+        from homepage.web_app import _dashboard_content
+        content = str(_dashboard_content())
+        # Should have widget class for card styling
+        assert 'class="widget"' in content or "class='widget'" in content
+
+
 class TestNavigationShell:
     """Test the navigation shell structure."""
 
