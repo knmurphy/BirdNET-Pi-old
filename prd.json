@@ -1,45 +1,9 @@
 {
   "goal": "Complete Field Station OS FastHTML web app with TDD",
-  "tasks": [
-    {
-      "id": "1",
-      "title": "Apply .widget classes to dashboard content",
-      "description": "Update _dashboard_content() to use .widget, .widget-label, .widget-value classes for proper styling",
-      "status": "completed",
-      "priority": 0,
-      "dependencies": []
-    },
-    {
-      "id": "2",
-      "title": "Add confidence color coding to detections",
-      "description": "Apply .conf-high/medium/low classes based on confidence score in detections list",
-      "status": "open",
-      "priority": 1,
-      "dependencies": []
-    },
-    {
-      "id": "3",
-      "title": "Add audio playback to detections",
-      "description": "Add Audio elements with playback controls for detection recordings",
-      "status": "open",
-      "priority": 1,
-      "dependencies": []
-    },
-    {
-      "id": "4",
-      "title": "Add hourly activity chart to stats",
-      "description": "Show detections per hour for today with a simple bar chart or table",
-      "status": "open",
-      "priority": 2,
-      "dependencies": []
-    },
-    {
-      "id": "5",
-      "title": "Add system health to stats",
-      "description": "Show disk usage, database size, and other system metrics",
-      "status": "open",
-      "priority": 2,
-      "dependencies": []
-    }
+  "task_tracking": "Beads",
+  "note": "All tasks are tracked in Beads. Run 'bd list' to see open tasks.",
+  "completed": [
+    "Apply .widget classes to dashboard content",
+    "Add confidence color coding to detections"
   ]
 }

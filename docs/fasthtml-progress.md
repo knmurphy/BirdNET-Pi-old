@@ -1,6 +1,6 @@
 # Field Station OS - FastHTML Implementation
 
-*2026-02-25T13:32:39Z by Showboat 0.6.1*
+*2026-02-25T16:55:00Z - Task tracking moved to Beads*
 <!-- showboat-id: 3e735aa7-4f03-4fb7-91a7-d1242ed96ec5 -->
 
 ## Overview
@@ -13,142 +13,50 @@ Starting fresh with FastHTML per `docs/ui-improvement-proposal.md`.
 - Runs on Pi without build toolchain
 - Incremental migration from PHP
 
-**Existing PoC:** `homepage/web_app.py` already implements:
-- Dashboard with KPI widgets
-- Today's detections table with audio playback
-- Species recordings list
-- Species detail view
-- Charts (Streamlit embed)
-- Mobile bottom nav (CSS-only)
-
-**What we need to add:**
-- Dark theme (design system from archived React work)
-- SSE for real-time updates
-- Better typography and visual polish
-- Additional views (History, Stats, Settings)
-
-```bash
-pip show python-fasthtml 2>/dev/null || echo 'FastHTML not installed'
-```
-
-```output
-FastHTML not installed
-```
+## Current Status
 
 ```bash
 source .venv/bin/activate && pytest tests/test_web_app.py -v
 ```
 
-```output
-============================= test session starts ==============================
-platform darwin -- Python 3.14.3, pytest-9.0.2, pluggy-1.6.0 -- /Users/knmurphy/Documents/PROJECTS/BirdNET-Pi-old/.venv/bin/python3.14
-cachedir: .pytest_cache
-rootdir: /Users/knmurphy/Documents/PROJECTS/BirdNET-Pi-old
-plugins: anyio-4.12.1, asyncio-1.3.0
-asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
-collecting ... collected 4 items
+**21 tests passing** as of 2026-02-25.
 
-tests/test_web_app.py::TestAppCreation::test_app_exists PASSED           [ 25%]
-tests/test_web_app.py::TestAppCreation::test_app_is_fasthtml_instance PASSED [ 50%]
-tests/test_web_app.py::TestDashboardRoute::test_dashboard_route_exists PASSED [ 75%]
-tests/test_web_app.py::TestDashboardContent::test_dashboard_returns_html_with_title PASSED [100%]
+## Task Tracking
 
-============================== 4 passed in 0.15s ===============================
+**All tasks are tracked in Beads.** Run `bd list` to see open tasks.
+
+```bash
+bd list          # Show all open tasks
+bd ready         # Show unblocked work
+bd show <id>     # Show task details
 ```
 
+## Completed TDD Cycles
 
+1. **App Creation and Dashboard Route** - FastHTML app, `/app/dashboard` route
+2. **Database Query** - `get_today_detection_count()`, database connectivity
+3. **Settings Route** - `/app/settings` route handler
+4. **Design System** - APP_CSS with dark theme, CSS variables, Google Fonts
+5. **Navigation and Routes** - All 5 routes with navigation shell
+6. **Widget Classes** - Dashboard uses .widget, .widget-label, .widget-value
+7. **Confidence Color Coding** - `_confidence_class()` helper applied to detections
 
-## TDD Cycle 1: App Creation and Dashboard Route
+## Code Review Findings (2026-02-25)
 
-**RED:** Created tests for:
-- App exists and is FastHTML instance
-- Dashboard route is registered
-- Dashboard content contains 'Dashboard' heading
+Tracked in Beads as:
+- `BirdNET-Pi-old-otx` - Apply confidence classes to species content (P1)
+- `BirdNET-Pi-old-rx0` - Improve test assertions (P1)
+- `BirdNET-Pi-old-byw` - Add tests for total count functions (P1)
+- `BirdNET-Pi-old-7nx` - Add error logging to database functions (P2)
+- `BirdNET-Pi-old-2w7` - Add database error path tests (P2)
 
-Tests failed: ModuleNotFoundError (module didn't exist)
+## Feature Backlog
 
-**GREEN:** Created minimal `homepage/web_app.py`:
-- FastHTML app instance
-- `/app/dashboard` route
-- `_dashboard_content()` returns Div with H2('Dashboard')
-- `_shell()` wrapper function (minimal implementation)
+Tracked in Beads as:
+- `BirdNET-Pi-old-ceo` - Audio playback on detections (P1)
+- `BirdNET-Pi-old-cz0` - Hourly activity chart (P2)
+- `BirdNET-Pi-old-mkr` - System health metrics (P2)
 
-All 4 tests passed.
-
-
-
-## TDD Cycle 2: Database Query
-
-**RED:** Added test for `get_today_detection_count()` - failed with ImportError
-
-**GREEN:** Delegated to subagent which added:
-- Imports: os, sqlite3, date from datetime
-- DB_PATH constant
-- `get_today_detection_count()` function
-- Connects to `~/BirdNET-Pi/scripts/birds.db`, queries today's count
-
-All 5 tests now pass.
-
-
-
-## TDD Cycle 3: Settings Route
-
-**RED:** Added tests for /app/settings route:
-- test_settings_route_exists
-- test_settings_content_shows_settings
-
-**GREEN:** Implemented:
-- settings() route handler
-- _settings_content() function
-
-All 19 tests now pass.
-
-
-## TDD Cycle 4: Design System Implementation
-
-Implemented dark theme design system from PRD Section 9:
-
-**APP_CSS constant with:**
-- Color palette (--bg: #0D0F0B, --text: #F0EAD2, etc.)
-- Spacing scale (4px base: --space-1 through --space-16)
-- Border radius (--radius-sm/md/lg/full)
-- Typography (--font-mono/display/body)
-- Shadows (--shadow-sm/md/lg)
-- Base styles (reset, body, links)
-
-**Component styles:**
-- .app-shell (flex column, min-height 100dvh)
-- .topbar (header with mono font)
-- #content (main scrollable area)
-- .bottom-nav (mobile navigation)
-- .widget / .widget-grid (card styling)
-- .widget-label / .widget-value (typography)
-- .conf-high/medium/low (confidence colors)
-
-**Responsive design:**
-- Mobile-first with @media (max-width: 640px)
-- Bottom nav hidden on desktop, visible on mobile
-- Widget grid adjusts columns
-
-**Google Fonts:**
-- DM Mono (400, 500)
-- Fraunces (400, 700)
-- Source Serif 4 (400, italic)
-- Preconnect hints for performance
-
-**_shell() updated:**
-- Returns Html(Head(...), Body(...))
-- Full HTML document structure
-- Meta charset and viewport
-- Title "Field Station"
-
-All 19 tests passing.
-
-
-## TODO: Future Enhancements
-
-- More stats (hourly activity chart, system health)
-- Audio playback on detections
-- Apply .widget classes to dashboard content
+Future enhancements not yet in Beads:
 - SSE for real-time updates
 - PWA manifest and service worker
