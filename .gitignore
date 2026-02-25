@@ -19,3 +19,4 @@ firstrun.ini
 HUMAN.txt
 include_species_list.txt
 .sesskey
+.ralph/logs/

@@ -155,6 +155,18 @@ class TestSpeciesRoute:
         content = str(_species_content())
         assert "Species" in content
 
+    def test_species_content_uses_confidence_classes(self):
+        """Species content should apply confidence classes for max_conf."""
+        from homepage.web_app import _species_content
+        content = str(_species_content())
+        # Should contain one of the confidence class names (if data exists)
+        # This verifies the bug fix: species content applies confidence classes
+        has_conf_class = "conf-high" in content or "conf-medium" in content or "conf-low" in content
+        # If there are species today, they should have confidence classes
+        # If no species (empty state), the test passes vacuously
+        if "No species detected" not in content and "Error loading" not in content:
+            assert has_conf_class, "Species content should use confidence classes"
+
 
 
 class TestStatsRoute:

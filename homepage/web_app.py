@@ -400,7 +400,10 @@ def _species_content():
             return Div(H2("Today's Species"), P("No species detected today."))
 
         items = [
-            Div(f"{r['Com_Name']} - {r['count']} detections")
+            Div(
+                f"{r['Com_Name']} - {r['count']} detections (max: {float(r['max_conf'])*100:.0f}%%)",
+                cls=_confidence_class(float(r['max_conf']))
+            )
             for r in rows
         ]
         return Div(H2("Today's Species"), *items)
