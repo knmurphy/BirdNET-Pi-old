@@ -9,13 +9,14 @@ Following TDD: This code is written to pass tests, then refactored.
 import os
 import sqlite3
 import logging
+import shutil
 from datetime import date, datetime
 
 from fasthtml.common import (
     FastHTML, serve,
     Html, Head, Body, Title, Meta, Link, Style,
     Main, Nav, Header,
-    Div, H2, P, A, Audio,
+    Div, H2, H3, P, A, Audio,
 )
 
 # Database configuration
@@ -174,6 +175,77 @@ a:hover { text-decoration: underline; }
 .conf-high { color: var(--accent); }
 .conf-medium { color: var(--amber); }
 .conf-low { color: var(--red); }
+
+/* Hourly activity chart */
+.hourly-chart {
+  margin-bottom: var(--space-4);
+}
+.hourly-bar-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-1);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.hourly-label {
+  width: 40px;
+  color: var(--text2);
+  text-align: right;
+  flex-shrink: 0;
+}
+.hourly-bar-container {
+  flex: 1;
+  height: 16px;
+  background: var(--bg3);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.hourly-bar {
+  height: 100%;
+  background: var(--accent);
+  border-radius: var(--radius-sm);
+  transition: width 0.3s ease;
+}
+.hourly-count {
+  width: 40px;
+  color: var(--text);
+  text-align: right;
+  flex-shrink: 0;
+}
+
+/* System health section */
+.health-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+.health-item {
+  background: var(--bg3);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+}
+.health-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text2);
+  font-family: var(--font-mono);
+  margin-bottom: var(--space-1);
+}
+.health-value {
+  font-size: 18px;
+  font-weight: bold;
+  color: var(--accent);
+  font-family: var(--font-display);
+}
+.health-detail {
+  font-size: 11px;
+  color: var(--text3);
+  margin-top: var(--space-1);
+}
 
 /* Responsive */
 @media (max-width: 640px) {
@@ -444,11 +516,137 @@ def get_total_species_count() -> int:
         return 0
 
 
+def get_hourly_detections() -> dict:
+    """Get detections per hour for today. Returns {hour: count}."""
+    today = date.today().isoformat()
+    try:
+        con = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
+        cursor = con.execute(
+            "SELECT strftime('%H', Time) as hour, COUNT(*) as count "
+            "FROM detections WHERE Date = ? GROUP BY hour ORDER BY hour",
+            (today,)
+        )
+        rows = cursor.fetchall()
+        con.close()
+        # Return dict with hour (int) as key, count as value
+        return {int(row[0]): row[1] for row in rows}
+    except Exception as e:
+        logging.error(f"Error getting hourly detections: {e}")
+        return {}
+
+
+def get_system_health() -> dict:
+    """Get system health metrics: disk usage, database size, etc."""
+    health = {}
+    try:
+        # Get disk usage for the home directory (where data is stored)
+        disk = shutil.disk_usage(os.path.expanduser('~'))
+        health['disk_used_gb'] = disk.used / (1024**3)
+        health['disk_total_gb'] = disk.total / (1024**3)
+        health['disk_percent'] = (disk.used / disk.total) * 100
+    except Exception as e:
+        logging.error(f"Error getting disk usage: {e}")
+        health['disk_used_gb'] = 0
+        health['disk_total_gb'] = 0
+        health['disk_percent'] = 0
+
+    try:
+        # Get database file size
+        db_size = os.path.getsize(DB_PATH)
+        health['db_size_mb'] = db_size / (1024**2)
+    except Exception as e:
+        logging.error(f"Error getting database size: {e}")
+        health['db_size_mb'] = 0
+
+    try:
+        # Get recordings directory size
+        recordings_path = os.path.expanduser('~/BirdSongs/Extracted')
+        if os.path.exists(recordings_path):
+            total_size = 0
+            for dirpath, dirnames, filenames in os.walk(recordings_path):
+                for f in filenames:
+                    fp = os.path.join(dirpath, f)
+                    total_size += os.path.getsize(fp)
+            health['recordings_gb'] = total_size / (1024**3)
+        else:
+            health['recordings_gb'] = 0
+    except Exception as e:
+        logging.error(f"Error getting recordings size: {e}")
+        health['recordings_gb'] = 0
+
+    return health
+
+
+
+
 
 @app.get("/app/stats")
 def stats():
     """Render the stats page."""
     return _shell(_stats_content(), "/app/stats")
+
+
+def _hourly_activity_section() -> Div:
+    """Generate hourly activity bar chart for today."""
+    hourly_data = get_hourly_detections()
+    
+    if not hourly_data:
+        return Div(
+            H3("Today's Activity"),
+            P("No detections yet today.", cls="text2"),
+            cls="hourly-chart"
+        )
+    
+    max_count = max(hourly_data.values()) if hourly_data else 1
+    
+    bar_rows = []
+    for hour in range(24):
+        count = hourly_data.get(hour, 0)
+        bar_width = (count / max_count * 100) if max_count > 0 else 0
+        bar_rows.append(
+            Div(
+                Div(f"{hour:02d}:00", cls="hourly-label"),
+                Div(
+                    Div(cls="hourly-bar", style=f"width: {bar_width:.1f}%"),
+                    cls="hourly-bar-container"
+                ),
+                Div(str(count), cls="hourly-count"),
+                cls="hourly-bar-row"
+            )
+        )
+    
+    return Div(
+        H3("Today's Activity"),
+        Div(*bar_rows, cls="hourly-chart"),
+    )
+
+
+def _system_health_section() -> Div:
+    """Generate system health widgets."""
+    health = get_system_health()
+    
+    return Div(
+        H3("System Health"),
+        Div(
+            Div(
+                Div("Disk Usage", cls="health-label"),
+                Div(f"{health['disk_used_gb']:.1f} / {health['disk_total_gb']:.0f} GB", cls="health-value"),
+                Div(f"{health['disk_percent']:.1f}% used", cls="health-detail"),
+                cls="health-item"
+            ),
+            Div(
+                Div("Database", cls="health-label"),
+                Div(f"{health['db_size_mb']:.1f} MB", cls="health-value"),
+                cls="health-item"
+            ),
+            Div(
+                Div("Recordings", cls="health-label"),
+                Div(f"{health['recordings_gb']:.1f} GB", cls="health-value"),
+                cls="health-item"
+            ),
+            cls="health-grid"
+        ),
+    )
 
 
 def _stats_content():
@@ -458,9 +656,18 @@ def _stats_content():
 
     return Div(
         H2("Statistics"),
-        Div(f"Total Detections: {total_detections:,}"),
-        Div(f"Total Species: {total_species:,}"),
-        P("System stats coming soon...")
+        Div(
+            Div("Total Detections", cls="widget-label"),
+            Div(f"{total_detections:,}", cls="widget-value"),
+            cls="widget"
+        ),
+        Div(
+            Div("Total Species", cls="widget-label"),
+            Div(f"{total_species:,}", cls="widget-value"),
+            cls="widget"
+        ),
+        _hourly_activity_section(),
+        _system_health_section(),
     )
 
 @app.get("/app/settings")
