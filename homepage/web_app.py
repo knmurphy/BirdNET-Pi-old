@@ -458,9 +458,17 @@ def _stats_content():
 
     return Div(
         H2("Statistics"),
-        Div(f"Total Detections: {total_detections:,}"),
-        Div(f"Total Species: {total_species:,}"),
-        P("System stats coming soon...")
+        Div(
+            Div("Total Detections", cls="widget-label"),
+            Div(f"{total_detections:,}", cls="widget-value"),
+            cls="widget"
+        ),
+        Div(
+            Div("Total Species", cls="widget-label"),
+            Div(f"{total_species:,}", cls="widget-value"),
+            cls="widget"
+        ),
+        cls="widget-grid"
     )
 
 @app.get("/app/settings")

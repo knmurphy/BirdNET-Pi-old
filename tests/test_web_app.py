@@ -4,6 +4,7 @@ Tests for Field Station OS FastHTML web application.
 Following TDD: Write the test first, watch it fail, write minimal code to pass.
 """
 import pytest
+from unittest.mock import patch
 from fasthtml.common import FastHTML
 
 
@@ -119,15 +120,13 @@ class TestNavigationShell:
         """Shell should have a header with station title."""
         from homepage.web_app import _shell
         shell = str(_shell("test content", "/app/dashboard"))
-        # Shell should have header with proper title structure
-        assert "<title>Field Station</title>" in shell or "<h1" in shell
+        assert "<title>Field Station</title>" in shell
 
     def test_shell_has_bottom_tabs(self):
         """Shell should have bottom navigation with tabs."""
         from homepage.web_app import _shell
         shell = str(_shell("test content", "/app/dashboard"))
-        # Should have navigation tabs with proper href structure
-        assert '<a href="/app/dashboard"' in shell or "Dashboard</a>" in shell
+        assert '<a href="/app/dashboard"' in shell
 
 
 class TestDetectionsRoute:
@@ -212,8 +211,10 @@ class TestStatsRoute:
         """Stats content should show statistics."""
         from homepage.web_app import _stats_content
         content = str(_stats_content())
-        # Should contain "Statistics" header with proper H2 structure
         assert "<h2>Statistics</h2>" in content
+        assert "Total Detections" in content
+        assert "Total Species" in content
+        assert 'class="widget"' in content
 
 
 class TestSettingsRoute:
@@ -231,3 +232,51 @@ class TestSettingsRoute:
         content = str(_settings_content())
         # Should contain "Settings" header with proper H2 structure
         assert "<h2>Settings</h2>" in content
+
+
+class TestDatabaseErrorPaths:
+    """Test that database functions return safe defaults when the DB is unavailable."""
+
+    def test_get_today_detection_count_returns_zero_on_error(self):
+        """Should return 0 when the database cannot be reached."""
+        from homepage.web_app import get_today_detection_count
+        with patch("homepage.web_app.sqlite3.connect", side_effect=Exception("DB error")):
+            assert get_today_detection_count() == 0
+
+    def test_get_today_species_count_returns_zero_on_error(self):
+        """Should return 0 when the database cannot be reached."""
+        from homepage.web_app import get_today_species_count
+        with patch("homepage.web_app.sqlite3.connect", side_effect=Exception("DB error")):
+            assert get_today_species_count() == 0
+
+    def test_get_latest_detection_returns_none_on_error(self):
+        """Should return None when the database cannot be reached."""
+        from homepage.web_app import get_latest_detection
+        with patch("homepage.web_app.sqlite3.connect", side_effect=Exception("DB error")):
+            assert get_latest_detection() is None
+
+    def test_get_total_detection_count_returns_zero_on_error(self):
+        """Should return 0 when the database cannot be reached."""
+        from homepage.web_app import get_total_detection_count
+        with patch("homepage.web_app.sqlite3.connect", side_effect=Exception("DB error")):
+            assert get_total_detection_count() == 0
+
+    def test_get_total_species_count_returns_zero_on_error(self):
+        """Should return 0 when the database cannot be reached."""
+        from homepage.web_app import get_total_species_count
+        with patch("homepage.web_app.sqlite3.connect", side_effect=Exception("DB error")):
+            assert get_total_species_count() == 0
+
+    def test_detections_content_shows_error_message_on_db_failure(self):
+        """Detections content should show a fallback message when the DB fails."""
+        from homepage.web_app import _detections_content
+        with patch("homepage.web_app.sqlite3.connect", side_effect=Exception("DB error")):
+            content = str(_detections_content())
+        assert "Unable to load detections" in content
+
+    def test_species_content_shows_error_message_on_db_failure(self):
+        """Species content should show a fallback message when the DB fails."""
+        from homepage.web_app import _species_content
+        with patch("homepage.web_app.sqlite3.connect", side_effect=Exception("DB error")):
+            content = str(_species_content())
+        assert "Error loading species" in content
