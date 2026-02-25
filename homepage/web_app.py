@@ -10,10 +10,178 @@ import os
 import sqlite3
 from datetime import date, datetime
 
-from fasthtml.common import FastHTML, serve, Div, H2, Header, Nav, A, P
+from fasthtml.common import (
+    FastHTML, serve,
+    Html, Head, Body, Title, Meta, Link, Style,
+    Main, Nav, Header,
+    Div, H2, P, A,
+)
 
 # Database configuration
 DB_PATH = os.path.join(os.path.expanduser("~"), "BirdNET-Pi", "scripts", "birds.db")
+
+
+# Design System - Dark Theme
+APP_CSS = """
+:root {
+  /* Color Palette - Dark Theme (default) */
+  --bg: #0D0F0B;
+  --bg2: #141610;
+  --bg3: #1A1D16;
+  --border: #252820;
+  --text: #F0EAD2;
+  --text2: #9A9B8A;
+  --text3: #5A5C4E;
+  --accent: #C8E6A0;
+  --amber: #E8C547;
+  --red: #E05252;
+
+  /* Spacing Scale (4px base) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* Border Radius */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-full: 9999px;
+
+  /* Typography */
+  --font-mono: 'DM Mono', monospace;
+  --font-display: 'Fraunces', serif;
+  --font-body: 'Source Serif 4', Georgia, serif;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.5);
+}
+
+/* Reset */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* Base styles */
+html { font-size: 16px; }
+body {
+  font-family: var(--font-body);
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+  min-height: 100dvh;
+}
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* App Shell */
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+}
+
+/* Topbar / Header */
+.topbar {
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+/* Main content area */
+#content {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-4);
+}
+
+/* Bottom navigation (mobile) */
+.bottom-nav {
+  display: none;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  background: var(--bg2);
+  border-top: 1px solid var(--border);
+  justify-content: space-around;
+  padding: var(--space-2) 0;
+}
+.bottom-nav a {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--space-2) var(--space-1);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text2);
+  text-decoration: none;
+  flex: 1;
+  transition: color var(--transition-fast, 150ms ease);
+}
+.bottom-nav a:hover, .bottom-nav a.active {
+  color: var(--accent);
+}
+
+/* Widget grid */
+.widget-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+/* Widget cards */
+.widget {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  box-shadow: var(--shadow-sm);
+}
+.widget:hover {
+  box-shadow: var(--shadow-md);
+}
+.widget-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text2);
+  font-family: var(--font-mono);
+  margin-bottom: var(--space-2);
+}
+.widget-value {
+  font-size: 28px;
+  font-weight: bold;
+  color: var(--accent);
+  font-family: var(--font-display);
+}
+
+/* Confidence color coding */
+.conf-high { color: var(--accent); }
+.conf-medium { color: var(--amber); }
+.conf-low { color: var(--red); }
+
+/* Responsive */
+@media (max-width: 640px) {
+  .bottom-nav { display: flex; }
+  #content { padding-bottom: 72px; }
+  .widget-grid { grid-template-columns: 1fr 1fr; }
+  .widget-value { font-size: 22px; }
+}
+"""
 
 
 def get_today_detection_count() -> int:
@@ -107,12 +275,35 @@ def _shell(content, current_path: str = "/app/dashboard"):
         ("Settings", "/app/settings"),
     ]
 
-    nav_links = [A(name, href=path) for name, path in tabs]
+    nav_links = [
+        A(name, href=path, cls="active" if current_path == path else "")
+        for name, path in tabs
+    ]
 
-    return Div(
-        Header(f"Field Station - {current_time}"),
-        content,
-        Nav(*nav_links),
+    return Html(
+Head(
+            Meta(charset="utf-8"),
+            Meta(name="viewport", content="width=device-width, initial-scale=1"),
+            Link(rel="preconnect", href="https://fonts.googleapis.com"),
+            Link(rel="preconnect", href="https://fonts.gstatic.com", crossorigin=""),
+            Link(
+                rel="stylesheet",
+                href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:wght@400;700&family=Source+Serif+4:ital,wght@0,400;1,400&display=swap"
+            ),
+            Title("Field Station"),
+            Style(APP_CSS),
+        ),
+        Body(
+            Div(
+                Header(
+                    f"Field Station - {current_time}",
+                    cls="topbar",
+                ),
+                Main(content, id="content"),
+                Nav(*nav_links, cls="bottom-nav"),
+                cls="app-shell",
+            ),
+        ),
     )
 
 
