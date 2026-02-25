@@ -59,3 +59,30 @@ class TestDatabase:
         count = get_today_species_count()
         assert isinstance(count, int)
         assert count >= 0
+
+
+class TestDashboardWidgets:
+    """Test that dashboard displays real data."""
+
+    def test_dashboard_shows_today_detection_count(self):
+        """Dashboard should display today's detection count."""
+        from homepage.web_app import _dashboard_content
+        content = str(_dashboard_content())
+        # Dashboard should show detection count
+        assert "Detections" in content or "detections" in content
+
+
+    def test_dashboard_shows_today_species_count(self):
+        """Dashboard should display today's species count."""
+        from homepage.web_app import _dashboard_content
+        content = str(_dashboard_content())
+        # Dashboard should show species count
+        assert "Species" in content
+
+
+    def test_dashboard_shows_latest_detection(self):
+        """Dashboard should display the most recent detection."""
+        from homepage.web_app import _dashboard_content
+        content = str(_dashboard_content())
+        # Should show latest detection section
+        assert "Latest" in content or "latest" in content

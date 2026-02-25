@@ -31,6 +31,40 @@ def get_today_detection_count() -> int:
     except Exception:
         return 0
 
+
+def get_today_species_count() -> int:
+    """Query count of distinct species detected today."""
+    today = date.today().isoformat()
+    try:
+        con = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
+        cursor = con.execute(
+            "SELECT COUNT(DISTINCT Com_Name) FROM detections WHERE Date = ?",
+            (today,)
+        )
+        count = cursor.fetchone()[0]
+        con.close()
+        return count
+    except Exception:
+        return 0
+
+
+def get_latest_detection():
+    """Get the most recent detection."""
+    try:
+        con = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
+        con.row_factory = sqlite3.Row
+        cursor = con.execute(
+            "SELECT Com_Name, Time, Confidence FROM detections ORDER BY Date DESC, Time DESC LIMIT 1"
+        )
+        row = cursor.fetchone()
+        con.close()
+        if row:
+            return dict(row)
+        return None
+    except Exception:
+        return None
+
+
 # Create the FastHTML application
 app = FastHTML()
 
@@ -43,7 +77,22 @@ def dashboard():
 
 def _dashboard_content():
     """Generate the dashboard content."""
-    return Div(H2("Dashboard"))
+    today_count = get_today_detection_count()
+    species_count = get_today_species_count()
+    latest = get_latest_detection()
+
+    widgets = [
+        H2("Dashboard"),
+        Div(f"Today's Detections: {today_count}"),
+        Div(f"Today's Species: {species_count}"),
+    ]
+
+    if latest:
+        widgets.append(Div(f"Latest: {latest['Com_Name']} ({latest['Time']})"))
+    else:
+        widgets.append(Div("Latest: No detections yet"))
+
+    return Div(*widgets)
 
 
 def _shell(content, current_path: str = "/app/dashboard"):
