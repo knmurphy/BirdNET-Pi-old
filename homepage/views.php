@@ -18,10 +18,19 @@ if (!isset($_SESSION['behind'])) {
     // write the result to the cache file for the next request to pick up.
     // For this request use the stale cached value (if any) or empty string.
     $_SESSION['behind'] = file_exists($updateCacheFile) ? trim(file_get_contents($updateCacheFile)) : '';
-    $fetchCmd = "sudo -u".escapeshellarg($user)." git -C ".escapeshellarg($home."/BirdNET-Pi")." fetch 2>/dev/null"
-              . " && sudo -u".escapeshellarg($user)." git -C ".escapeshellarg($home."/BirdNET-Pi")." status"
-              . " | sed -n '2 p' | cut -d ' ' -f 7 > ".escapeshellarg($updateCacheFile)." &";
-    exec($fetchCmd);
+    // Use a lock file (created with O_CREAT|O_EXCL — atomic on POSIX) to ensure
+    // only one background fetch process runs at a time, preventing both redundant
+    // git network calls and concurrent writes to the cache file.
+    $lockFile = sys_get_temp_dir() . '/bnp_update_cache.lock';
+    $lh = @fopen($lockFile, 'x'); // fails atomically if lock already exists
+    if ($lh !== false) {
+      fclose($lh);
+      $fetchCmd = "sudo -u ".escapeshellarg($user)." git -C ".escapeshellarg($home."/BirdNET-Pi")." fetch 2>/dev/null"
+                . " && sudo -u ".escapeshellarg($user)." git -C ".escapeshellarg($home."/BirdNET-Pi")." status"
+                . " | sed -n '2 p' | cut -d ' ' -f 7 > ".escapeshellarg($updateCacheFile)
+                . " ; rm -f ".escapeshellarg($lockFile)." &";
+      exec($fetchCmd);
+    }
   }
   if(isset($_SESSION['behind']) && intval($_SESSION['behind']) >= 99) {?>
   <style>

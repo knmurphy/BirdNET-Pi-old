@@ -2,9 +2,18 @@
 error_reporting(0);
 ini_set('display_errors', 0);
 
+// Handle AJAX stats request — must happen before DB connection attempt so that
+// a DB failure returns a proper JSON error rather than HTML.
+$isAjax = isset($_GET['ajax_stats']) && $_GET['ajax_stats'] === 'true';
+
 $db = new SQLite3('./scripts/birds.db', SQLITE3_OPEN_CREATE | SQLITE3_OPEN_READWRITE);
 if ($db == False) {
-  echo "<p>Database busy</p>";
+  if ($isAjax) {
+    header('Content-Type: application/json');
+    echo json_encode(['error' => 'Database busy']);
+  } else {
+    echo "<p>Database busy</p>";
+  }
   exit;
 }
 
@@ -20,7 +29,7 @@ $time = time();
 $refresh = max(1, intval($config['RECORDING_LENGTH'] ?? 15));
 
 // If this is an AJAX stats refresh, return only the stat widget values
-if (isset($_GET['ajax_stats']) && $_GET['ajax_stats'] == 'true') {
+if ($isAjax) {
   $totalcount    = $db->querySingle('SELECT COUNT(*) FROM detections') ?? 0;
   $todaycount    = $db->querySingle("SELECT COUNT(*) FROM detections WHERE Date == DATE('now', 'localtime')") ?? 0;
   $hourcount     = $db->querySingle("SELECT COUNT(*) FROM detections WHERE Date == DATE('now', 'localtime') AND TIME >= TIME('now', 'localtime', '-1 hour')") ?? 0;
@@ -129,7 +138,7 @@ $latest = $stmt ? $stmt->execute()->fetchArray(SQLITE3_ASSOC) : null;
     <div class="widget widget-chart" id="chart-today">
       <div class="widget-label">Today&rsquo;s Chart</div>
       <?php if (file_exists('./Charts/' . $chart)): ?>
-        <img id="dash-chart" src="/Charts/<?php echo $chart; ?>?nocache=<?php echo $time; ?>" style="width:100%;max-width:100%;">
+        <img id="dash-chart" src="/Charts/<?php echo htmlspecialchars($chart); ?>?nocache=<?php echo $time; ?>" style="width:100%;max-width:100%;">
       <?php else: ?>
         <p class="widget-no-data">Chart not yet available for today.</p>
       <?php endif; ?>
@@ -178,6 +187,10 @@ setInterval(function () {
 setInterval(function () {
   var xhr = new XMLHttpRequest();
   xhr.onload = function () {
+    if (this.status !== 200) {
+      console.error('Stats refresh failed with status:', this.status);
+      return;
+    }
     try {
       var data = JSON.parse(this.responseText);
       var map = {
@@ -198,12 +211,20 @@ setInterval(function () {
         var ln = document.getElementById('val-latest-name');
         if (ln) {
           ln.textContent = data.latest_name;
-          ln.value = data.latest_raw;
+          if (ln.tagName === 'BUTTON') ln.value = data.latest_raw;
         }
         var lm = document.getElementById('val-latest-meta');
         if (lm) lm.textContent = data.latest_date + ' \u2022 ' + data.latest_conf + '% confidence';
       }
-    } catch (e) {}
+    } catch (e) {
+      console.error('Stats update failed:', e);
+    }
+  };
+  xhr.onerror = function () {
+    console.error('Stats refresh request failed', {
+      status: xhr.status,
+      statusText: xhr.statusText
+    });
   };
   xhr.open('GET', 'dashboard.php?ajax_stats=true', true);
   xhr.send();
