@@ -70,8 +70,12 @@ def sendAppriseNotifications(sci_name, com_name, confidence, confidencepct, path
 
     settings_dict = get_settings()
     title = html.unescape(settings_dict.get('APPRISE_NOTIFICATION_TITLE'))
-    f = open(APPRISE_BODY, 'r')
-    body = f.read()
+    try:
+        with open(APPRISE_BODY, 'r') as f:
+            body = f.read()
+    except FileNotFoundError:
+        print(f"APPRISE body template file not found: {APPRISE_BODY}")
+        return
 
     websiteurl = settings_dict.get('BIRDNETPI_URL')
     if websiteurl is None or len(websiteurl) == 0:
@@ -123,17 +127,27 @@ def should_notify(com_name):
     if not (os.path.exists(APPRISE_CONFIG) and os.path.getsize(APPRISE_CONFIG) > 0):
         return False
 
-    # check if this is an excluded species
-    APPRISE_ONLY_NOTIFY_SPECIES_NAMES = settings_dict.get('APPRISE_ONLY_NOTIFY_SPECIES_NAMES')
-    if APPRISE_ONLY_NOTIFY_SPECIES_NAMES is not None and APPRISE_ONLY_NOTIFY_SPECIES_NAMES.strip() != "":
-        excluded_species = [bird.lower().replace(" ", "") for bird in APPRISE_ONLY_NOTIFY_SPECIES_NAMES.split(",")]
+    # Note: despite its name, APPRISE_ONLY_NOTIFY_SPECIES_NAMES is an exclusion list —
+    # species listed here will NOT trigger notifications.
+    excluded_species_config = settings_dict.get('APPRISE_ONLY_NOTIFY_SPECIES_NAMES')
+    if excluded_species_config is not None and excluded_species_config.strip() != "":
+        excluded_species = [
+            bird.lower().replace(" ", "")
+            for bird in excluded_species_config.split(",")
+            if bird.strip()
+        ]
         if com_name.lower().replace(" ", "") in excluded_species:
             return False
 
-    # check if this is an included species
-    APPRISE_ONLY_NOTIFY_SPECIES_NAMES_2 = settings_dict.get('APPRISE_ONLY_NOTIFY_SPECIES_NAMES_2')
-    if APPRISE_ONLY_NOTIFY_SPECIES_NAMES_2 is not None and APPRISE_ONLY_NOTIFY_SPECIES_NAMES_2.strip() != "":
-        included_species = [bird.lower().replace(" ", "") for bird in APPRISE_ONLY_NOTIFY_SPECIES_NAMES_2.split(",")]
+    # APPRISE_ONLY_NOTIFY_SPECIES_NAMES_2 is an inclusion list — only species listed
+    # here will trigger notifications when this setting is non-empty.
+    included_species_config = settings_dict.get('APPRISE_ONLY_NOTIFY_SPECIES_NAMES_2')
+    if included_species_config is not None and included_species_config.strip() != "":
+        included_species = [
+            bird.lower().replace(" ", "")
+            for bird in included_species_config.split(",")
+            if bird.strip()
+        ]
         if com_name.lower().replace(" ", "") not in included_species:
             return False
 

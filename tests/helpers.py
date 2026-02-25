@@ -4,11 +4,23 @@ TESTDATA = os.path.join(os.path.dirname(__file__), 'testdata')
 
 
 class Settings(dict):
-    def getint(self, key):
-        return int(self.get(key))
+    def getint(self, key, default=None):
+        value = self.get(key, default)
+        if value is None:
+            return default
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return default
 
-    def getfloat(self, key):
-        return float(self.get(key))
+    def getfloat(self, key, default=None):
+        value = self.get(key, default)
+        if value is None:
+            return default
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return default
 
     @classmethod
     def with_defaults(cls):

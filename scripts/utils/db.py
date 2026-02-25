@@ -79,18 +79,35 @@ def get_summary():
 
 
 def get_species_by(sort_by=None, date=None):
-    where = "" if date is None else f'WHERE Date == "{date}"'
+    if date is None:
+        where = ""
+        params = []
+    else:
+        where = "WHERE Date == ?"
+        params = [date]
+
     if sort_by == "occurrences":
-        select_sql = (f"SELECT Date, Time, File_Name, Com_Name, Sci_Name, COUNT(*) as Count, MAX(Confidence) as MaxConfidence "
+        select_sql = ("SELECT Date, Time, File_Name, Com_Name, Sci_Name, COUNT(*) as Count, MAX(Confidence) as MaxConfidence "
                       f"FROM detections {where} GROUP BY Sci_Name ORDER BY COUNT(*) DESC;")
     elif sort_by == "confidence":
-        select_sql = (f"SELECT Date, Time, File_Name, Com_Name, Sci_Name, COUNT(*) as Count, MAX(Confidence) as MaxConfidence "
+        select_sql = ("SELECT Date, Time, File_Name, Com_Name, Sci_Name, COUNT(*) as Count, MAX(Confidence) as MaxConfidence "
                       f"FROM detections {where} GROUP BY Sci_Name ORDER BY MAX(Confidence) DESC;")
     elif sort_by == "date":
-        select_sql = (f"SELECT Date, Time, File_Name, Com_Name, Sci_Name, COUNT(*) as Count, MAX(Confidence) as MaxConfidence "
+        select_sql = ("SELECT Date, Time, File_Name, Com_Name, Sci_Name, COUNT(*) as Count, MAX(Confidence) as MaxConfidence "
                       f"FROM detections {where} GROUP BY Sci_Name ORDER BY MIN(Date) DESC, Time DESC;")
     else:
-        select_sql = (f"SELECT Date, Time, File_Name, Com_Name, Sci_Name, COUNT(*) as Count, MAX(Confidence) as MaxConfidence "
+        select_sql = ("SELECT Date, Time, File_Name, Com_Name, Sci_Name, COUNT(*) as Count, MAX(Confidence) as MaxConfidence "
                       f"FROM detections {where} GROUP BY Sci_Name ORDER BY Com_Name ASC;")
-    records = get_records(select_sql)
+
+    if params:
+        con = get_db()
+        try:
+            cur = con.execute(select_sql, params)
+            records = cur.fetchall()
+        except sqlite3.Error as e:
+            print(e)
+            timeim.sleep(2)
+            records = []
+    else:
+        records = get_records(select_sql)
     return records
