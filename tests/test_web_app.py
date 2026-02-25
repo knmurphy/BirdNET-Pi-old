@@ -39,8 +39,8 @@ class TestDashboardContent:
         """Dashboard should return HTML containing the site title."""
         from homepage.web_app import _dashboard_content
         content = _dashboard_content()
-        # The content should contain "Dashboard" heading
-        assert "Dashboard" in str(content)
+        # The content should contain "Dashboard" heading as an H2 element
+        assert "<h2>Dashboard</h2>" in str(content)
 
 
 class TestDatabase:
@@ -83,24 +83,25 @@ class TestDashboardWidgets:
         """Dashboard should display today's detection count."""
         from homepage.web_app import _dashboard_content
         content = str(_dashboard_content())
-        # Dashboard should show detection count
-        assert "Detections" in content or "detections" in content
+        # Dashboard should show detection count in a widget with proper structure
+        assert "Today's Detections" in content
+        assert 'class="widget"' in content
 
 
     def test_dashboard_shows_today_species_count(self):
         """Dashboard should display today's species count."""
         from homepage.web_app import _dashboard_content
         content = str(_dashboard_content())
-        # Dashboard should show species count
-        assert "Species" in content
+        # Dashboard should show species count in a widget with proper structure
+        assert "Today's Species" in content
 
 
     def test_dashboard_shows_latest_detection(self):
         """Dashboard should display the most recent detection."""
         from homepage.web_app import _dashboard_content
         content = str(_dashboard_content())
-        # Should show latest detection section
-        assert "Latest" in content or "latest" in content
+        # Should show latest detection section with proper label
+        assert "Latest Detection" in content or "No detections yet" in content
 
 
     def test_dashboard_uses_widget_classes(self):
@@ -118,14 +119,15 @@ class TestNavigationShell:
         """Shell should have a header with station title."""
         from homepage.web_app import _shell
         shell = str(_shell("test content", "/app/dashboard"))
-        assert "Field Station" in shell or "Station" in shell
+        # Shell should have header with proper title structure
+        assert "<title>Field Station</title>" in shell or "<h1" in shell
 
     def test_shell_has_bottom_tabs(self):
         """Shell should have bottom navigation with tabs."""
         from homepage.web_app import _shell
         shell = str(_shell("test content", "/app/dashboard"))
-        # Should have navigation tabs
-        assert "Dashboard" in shell
+        # Should have navigation tabs with proper href structure
+        assert '<a href="/app/dashboard"' in shell or "Dashboard</a>" in shell
 
 
 class TestDetectionsRoute:
@@ -141,8 +143,8 @@ class TestDetectionsRoute:
         """Detections content should show species names."""
         from homepage.web_app import _detections_content
         content = str(_detections_content())
-        # Should contain detections header
-        assert "Detection" in content
+        # Should contain "Today's Detections" header with proper H2 structure
+        assert "<h2>Today's Detections</h2>" in content or "No detections" in content
 
 
 
@@ -168,7 +170,8 @@ class TestSpeciesRoute:
         """Species content should show species information."""
         from homepage.web_app import _species_content
         content = str(_species_content())
-        assert "Species" in content
+        # Should contain "Today's Species" header with proper H2 structure
+        assert "<h2>Today's Species</h2>" in content or "No species detected" in content
 
     def test_species_content_uses_confidence_classes(self):
         """Species content should apply confidence classes for max_conf."""
@@ -197,7 +200,8 @@ class TestStatsRoute:
         """Stats content should show statistics."""
         from homepage.web_app import _stats_content
         content = str(_stats_content())
-        assert "Stat" in content or "stat" in content
+        # Should contain "Statistics" header with proper H2 structure
+        assert "<h2>Statistics</h2>" in content
 
 
 class TestSettingsRoute:
@@ -213,4 +217,5 @@ class TestSettingsRoute:
         """Settings content should show settings information."""
         from homepage.web_app import _settings_content
         content = str(_settings_content())
-        assert "Setting" in content or "setting" in content
+        # Should contain "Settings" header with proper H2 structure
+        assert "<h2>Settings</h2>" in content
