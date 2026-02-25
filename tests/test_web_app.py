@@ -146,6 +146,18 @@ class TestDetectionsRoute:
         # Should contain "Today's Detections" header with proper H2 structure
         assert "<h2>Today's Detections</h2>" in content or "No detections" in content
 
+    def test_detections_content_has_audio_playback(self):
+        """Detections content should include audio elements for playback."""
+        from homepage.web_app import _detections_content
+        content = str(_detections_content())
+        # If there are detections, they should include audio elements
+        # If no detections or error, the test passes vacuously
+        has_detections = "<h2>Today's Detections</h2>" in content
+        has_no_data = "No detections" in content or "Unable to load" in content
+        if has_detections and not has_no_data:
+            assert "<audio" in content, "Detections should include audio elements"
+            assert "controls" in content, "Audio elements should have controls"
+
 
 
     def test_confidence_class_helper(self):

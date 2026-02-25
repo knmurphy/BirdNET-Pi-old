@@ -14,7 +14,7 @@ from fasthtml.common import (
     FastHTML, serve,
     Html, Head, Body, Title, Meta, Link, Style,
     Main, Nav, Header,
-    Div, H2, P, A,
+    Div, H2, P, A, Audio,
 )
 
 # Database configuration
@@ -353,7 +353,7 @@ def _detections_content():
         con = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
         con.row_factory = sqlite3.Row
         cursor = con.execute(
-            "SELECT Com_Name, Sci_Name, Time, Confidence FROM detections WHERE Date = ? ORDER BY Time DESC LIMIT 50",
+            "SELECT Com_Name, Sci_Name, Time, Confidence, File_Name FROM detections WHERE Date = ? ORDER BY Time DESC LIMIT 50",
             (today,)
         )
         rows = cursor.fetchall()
@@ -364,7 +364,8 @@ def _detections_content():
 
         items = [
             Div(
-                f"{row['Time']} - {row['Com_Name']} ({float(row['Confidence'])*100:.0f}%)",
+                f"{row['Time']} - {row['Com_Name']} ({float(row['Confidence'])*100:.0f}%%)",
+                Audio(controls=True, preload="none", src=row['File_Name']),
                 cls=_confidence_class(float(row['Confidence']))
             )
             for row in rows
