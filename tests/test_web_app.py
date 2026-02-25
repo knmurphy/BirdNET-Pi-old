@@ -5,6 +5,8 @@ Following TDD: Write the test first, watch it fail, write minimal code to pass.
 """
 import pytest
 from fasthtml.common import FastHTML
+import sqlite3
+from unittest.mock import patch
 
 
 class TestAppCreation:
@@ -231,3 +233,65 @@ class TestSettingsRoute:
         content = str(_settings_content())
         # Should contain "Settings" header with proper H2 structure
         assert "<h2>Settings</h2>" in content
+
+
+class TestDatabaseErrorPaths:
+    """Test graceful degradation when database is unavailable or malformed."""
+
+    @patch('homepage.web_app.sqlite3.connect')
+    def test_get_today_detection_count_returns_zero_on_error(self, mock_connect):
+        """Should return 0 when database is unavailable."""
+        mock_connect.side_effect = sqlite3.Error("Database unavailable")
+        from homepage.web_app import get_today_detection_count
+        count = get_today_detection_count()
+        assert count == 0
+
+    @patch('homepage.web_app.sqlite3.connect')
+    def test_get_today_species_count_returns_zero_on_error(self, mock_connect):
+        """Should return 0 when database is unavailable."""
+        mock_connect.side_effect = sqlite3.Error("Database unavailable")
+        from homepage.web_app import get_today_species_count
+        count = get_today_species_count()
+        assert count == 0
+
+    @patch('homepage.web_app.sqlite3.connect')
+    def test_get_latest_detection_returns_none_on_error(self, mock_connect):
+        """Should return None when database is unavailable."""
+        mock_connect.side_effect = sqlite3.Error("Database unavailable")
+        from homepage.web_app import get_latest_detection
+        result = get_latest_detection()
+        assert result is None
+
+    @patch('homepage.web_app.sqlite3.connect')
+    def test_get_total_detection_count_returns_zero_on_error(self, mock_connect):
+        """Should return 0 when database is unavailable."""
+        mock_connect.side_effect = sqlite3.Error("Database unavailable")
+        from homepage.web_app import get_total_detection_count
+        count = get_total_detection_count()
+        assert count == 0
+
+    @patch('homepage.web_app.sqlite3.connect')
+    def test_get_total_species_count_returns_zero_on_error(self, mock_connect):
+        """Should return 0 when database is unavailable."""
+        mock_connect.side_effect = sqlite3.Error("Database unavailable")
+        from homepage.web_app import get_total_species_count
+        count = get_total_species_count()
+        assert count == 0
+
+    @patch('homepage.web_app.sqlite3.connect')
+    def test_detections_content_returns_error_div_on_error(self, mock_connect):
+        """Should return Div with error message when database is unavailable."""
+        mock_connect.side_effect = sqlite3.Error("Database unavailable")
+        from homepage.web_app import _detections_content
+        content = str(_detections_content())
+        assert "<h2>Today's Detections</h2>" in content
+        assert "Unable to load detections" in content
+
+    @patch('homepage.web_app.sqlite3.connect')
+    def test_species_content_returns_error_div_on_error(self, mock_connect):
+        """Should return Div with error message when database is unavailable."""
+        mock_connect.side_effect = sqlite3.Error("Database unavailable")
+        from homepage.web_app import _species_content
+        content = str(_species_content())
+        assert "<h2>Today's Species</h2>" in content
+        assert "Error loading species" in content
