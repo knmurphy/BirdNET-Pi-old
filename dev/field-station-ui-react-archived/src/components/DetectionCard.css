@@ -1,0 +1,269 @@
+/**
+ * Detection Card Styles
+ * Mobile-first card for displaying detection events
+ */
+
+.detection-card {
+  /* Contain layout for performance */
+  contain: layout style;
+
+  /* Card background and spacing */
+  background-color: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  
+  /* Interaction states */
+  cursor: default;
+  transition: 
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    transform var(--transition-fast);
+}
+
+.detection-card[role="button"] {
+  cursor: pointer;
+}
+
+.detection-card[role="button"]:hover {
+  background-color: var(--bg3);
+  border-color: var(--text3);
+}
+
+.detection-card[role="button"]:active {
+  transform: scale(0.98);
+}
+
+.detection-card[role="button"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* New detection animation */
+.detection-card--new {
+  animation: slideDown 200ms ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Header row: common name + time */
+.detection-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-3);
+  margin-bottom: var(--space-1);
+}
+
+/* Common name - primary text, largest */
+.detection-card__common-name {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);  /* 17px */
+  font-weight: 700;
+  line-height: var(--leading-tight);
+  color: var(--text);
+  margin: 0;
+  
+  /* Prevent overflow on long names */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+/* Time - mono, right-aligned */
+.detection-card__time {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);  /* 11px */
+  line-height: var(--leading-tight);
+  color: var(--text3);
+  flex-shrink: 0;
+  letter-spacing: 0.02em;
+}
+
+/* Scientific name - italic, muted */
+.detection-card__scientific-name {
+  font-family: var(--font-body);
+  font-size: var(--text-base);  /* 14px - using base for italic */
+  font-style: italic;
+  font-weight: 400;
+  line-height: var(--leading-normal);
+  color: var(--text2);
+  margin: 0 0 var(--space-3) 0;
+  
+  /* Prevent overflow on long names */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Confidence row */
+.detection-card__confidence {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+/* Confidence bar container */
+.detection-card__confidence-bar {
+  flex: 1;
+  height: 4px;
+  background-color: var(--bg3);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+/* Confidence fill - color set inline */
+.detection-card__confidence-fill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  transition: width var(--transition-normal);
+}
+
+/* Confidence percentage */
+.detection-card__confidence-value {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);  /* 12px */
+  line-height: 1;
+  color: var(--text2);
+  flex-shrink: 0;
+  min-width: 36px;
+  text-align: right;
+}
+
+/* Footer: classifier badge */
+.detection-card__footer {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.detection-card__classifier {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+/* Classifier colored dot */
+.detection-card__classifier-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+}
+
+/* Classifier name */
+.detection-card__classifier-name {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);  /* 11px */
+  line-height: 1;
+  color: var(--text3);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+/* =========================================
+ * Loading Skeleton State
+ * ========================================= */
+
+.detection-card--skeleton {
+  pointer-events: none;
+}
+
+.detection-card--skeleton .detection-card__common-name,
+.detection-card--skeleton .detection-card__scientific-name,
+.detection-card--skeleton .detection-card__confidence-bar,
+.detection-card--skeleton .detection-card__classifier-name {
+  background: linear-gradient(
+    90deg,
+    var(--bg3) 25%,
+    var(--border) 50%,
+    var(--bg3) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: var(--radius-sm);
+  color: transparent;
+}
+
+.detection-card--skeleton .detection-card__common-name {
+  width: 60%;
+  height: 20px;
+}
+
+.detection-card--skeleton .detection-card__scientific-name {
+  width: 50%;
+  height: 14px;
+}
+
+.detection-card--skeleton .detection-card__confidence-bar {
+  height: 4px;
+}
+
+.detection-card--skeleton .detection-card__classifier-name {
+  width: 50px;
+  height: 11px;
+}
+
+.detection-card--skeleton .detection-card__time,
+.detection-card--skeleton .detection-card__confidence-value,
+.detection-card--skeleton .detection-card__confidence-fill,
+.detection-card--skeleton .detection-card__classifier-dot {
+  visibility: hidden;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* =========================================
+ * Responsive Adjustments
+ * ========================================= */
+
+/* Slightly larger on tablets+ */
+@media (min-width: 600px) {
+  .detection-card {
+    padding: var(--space-4) var(--space-5);
+  }
+  
+  .detection-card__common-name {
+    font-size: var(--text-xl);  /* 20px */
+  }
+  
+  .detection-card__scientific-name {
+    font-size: 15px;
+  }
+}
+
+/* =========================================
+ * Reduced Motion
+ * ========================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  .detection-card--new {
+    animation: none;
+  }
+  
+  .detection-card--skeleton .detection-card__common-name,
+  .detection-card--skeleton .detection-card__scientific-name,
+  .detection-card--skeleton .detection-card__confidence-bar,
+  .detection-card--skeleton .detection-card__classifier-name {
+    animation: none;
+  }
+}

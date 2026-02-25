@@ -1,0 +1,328 @@
+/**
+ * Global Styles
+ * 
+ * Reset/normalize, body styles, and typography scale
+ * for Field Station OS UI
+ */
+
+/* =========================================
+ * Minimal Reset
+ * ========================================= */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* =========================================
+ * Root & Document
+ * ========================================= */
+html {
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* Dark theme by default */
+html {
+  color-scheme: dark;
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+}
+
+/* =========================================
+ * Body
+ * ========================================= */
+body {
+  min-width: 375px;
+  min-height: 100vh;
+  min-height: 100dvh; /* Better mobile viewport handling */
+  
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  font-weight: 400;
+  line-height: var(--leading-normal);
+  
+  color: var(--text);
+  background-color: var(--bg);
+  
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  
+  overflow-x: hidden;
+}
+
+/* =========================================
+ * Typography
+ * ========================================= */
+
+/* Headings */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  line-height: var(--leading-tight);
+  color: var(--text);
+}
+
+h1 {
+  font-size: var(--text-xl);
+}
+
+h2 {
+  font-size: var(--text-lg);
+}
+
+h3 {
+  font-size: var(--text-base);
+}
+
+h4, h5, h6 {
+  font-size: var(--text-sm);
+}
+
+/* Paragraphs */
+p {
+  margin-bottom: var(--space-4);
+}
+
+/* Links */
+a {
+  color: var(--accent);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+a:hover {
+  color: var(--text);
+}
+
+a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* Scientific names (italic) */
+.scientific-name,
+em.scientific {
+  font-family: var(--font-body);
+  font-style: italic;
+  color: var(--text2);
+}
+
+/* Labels and codes (mono) */
+.label,
+.code,
+.timestamp,
+.station-id {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  letter-spacing: 0.02em;
+}
+
+/* Small labels */
+.label-xs {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text3);
+}
+
+/* =========================================
+ * Interactive Elements
+ * ========================================= */
+
+/* Buttons */
+button {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  
+  color: var(--text);
+  background-color: var(--bg3);
+  
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  
+  padding: var(--space-2) var(--space-4);
+  cursor: pointer;
+  
+  transition: all var(--transition-fast);
+}
+
+button:hover {
+  background-color: var(--bg2);
+  border-color: var(--text3);
+}
+
+button:active {
+  background-color: var(--bg);
+}
+
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Primary button variant */
+button.primary {
+  background-color: var(--accent);
+  color: var(--bg);
+  border-color: var(--accent);
+}
+
+button.primary:hover {
+  background-color: var(--text);
+  border-color: var(--text);
+}
+
+/* =========================================
+ * Form Elements
+ * ========================================= */
+input,
+select,
+textarea {
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  
+  color: var(--text);
+  background-color: var(--bg3);
+  
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  
+  padding: var(--space-2) var(--space-3);
+  
+  transition: border-color var(--transition-fast);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--text3);
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* =========================================
+ * Lists
+ * ========================================= */
+ul, ol {
+  list-style: none;
+}
+
+/* =========================================
+ * Media
+ * ========================================= */
+img, video {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* =========================================
+ * Accessibility
+ * ========================================= */
+
+/* Focus visible for keyboard navigation */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Skip link for screen readers */
+.skip-link {
+  position: absolute;
+  top: -100%;
+  left: 0;
+  background: var(--accent);
+  color: var(--bg);
+  padding: var(--space-2) var(--space-4);
+  z-index: var(--z-toast);
+}
+
+.skip-link:focus {
+  top: 0;
+}
+
+/* Reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* =========================================
+ * Utility Classes
+ * ========================================= */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* =========================================
+ * Scrollbar Styling (WebKit)
+ * ========================================= */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg2);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text3);
+}
+
+/* Firefox scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) var(--bg2);
+}

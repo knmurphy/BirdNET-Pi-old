@@ -1,0 +1,111 @@
+/**
+ * Field Station OS Design Tokens
+ * CSS Custom Properties for theming
+ */
+
+:root {
+  /* =========================================
+   * Color Palette - Dark Theme (default)
+   * ========================================= */
+  --bg: #0D0F0B;
+  --bg2: #141610;
+  --bg3: #1A1D16;
+  --border: #252820;
+  --text: #F0EAD2;
+  --text2: #9A9B8A;
+  --text3: #5A5C4E;
+  --accent: #C8E6A0;
+  --amber: #E8C547;
+  --red: #E05252;
+
+  /* Classifier default colors */
+  --classifier-birdnet: #C8E6A0;
+  --classifier-batdetect2: #A0C4E8;
+  --classifier-google-perch: #E8C4A0;
+  --classifier-unknown: #9A9B8A;
+
+  /* =========================================
+   * Spacing Scale (4px base)
+   * ========================================= */
+  --space-0: 0;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 28px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* =========================================
+   * Border Radius
+   * ========================================= */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-full: 9999px;
+
+  /* =========================================
+   * Typography Scale
+   * ========================================= */
+  --font-mono: 'DM Mono', monospace;
+  --font-display: 'Fraunces', serif;
+  --font-body: 'Source Serif 4', Georgia, serif;
+
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-base: 14px;
+  --text-lg: 17px;
+  --text-xl: 20px;
+
+  --leading-tight: 1.25;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.75;
+
+  /* =========================================
+   * Transitions
+   * ========================================= */
+  --transition-fast: 150ms ease;
+  --transition-normal: 200ms ease;
+  --transition-slow: 300ms ease;
+
+  /* =========================================
+   * Shadows (subtle, for dark theme)
+   * ========================================= */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.5);
+
+  /* =========================================
+   * Z-Index Scale
+   * ========================================= */
+  --z-base: 0;
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-overlay: 300;
+  --z-modal: 400;
+  --z-toast: 500;
+}
+
+/* =========================================
+ * Light Theme Tokens (Phase 3 toggle)
+ * ========================================= */
+[data-theme="light"] {
+  --bg: #F5F3EB;
+  --bg2: #EBE9DF;
+  --bg3: #E1DFD5;
+  --border: #D4D2C8;
+  --text: #1A1D16;
+  --text2: #4A4C44;
+  --text3: #8A8C84;
+  --accent: #5A8A30;
+  --amber: #B8950D;
+  --red: #C03030;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.12);
+}

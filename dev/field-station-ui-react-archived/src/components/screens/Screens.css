@@ -1,0 +1,258 @@
+/**
+ * Screen Placeholder Styles
+ * Shared styles for placeholder screens
+ */
+
+.screen {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding-bottom: calc(60px + var(--space-8) + env(safe-area-inset-bottom));
+}
+
+.screen__placeholder {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-8) var(--space-6);
+  text-align: center;
+}
+
+.screen__icon {
+  font-size: 48px;
+  line-height: 1;
+  color: var(--text3);
+  margin-bottom: var(--space-6);
+  opacity: 0.5;
+}
+
+.screen__title {
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: var(--space-3);
+}
+
+.screen__text {
+  font-size: var(--text-base);
+  color: var(--text2);
+  margin-bottom: var(--space-4);
+}
+
+.screen__hint {
+  font-size: var(--text-sm);
+  color: var(--text3);
+  max-width: 280px;
+}
+
+
+/* =========================================
+ * Species Screen
+ * ========================================= */
+
+.species-list {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.species-list__header {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+  background-color: var(--bg);
+  padding: var(--space-4);
+  border-bottom: 1px solid var(--border);
+}
+
+.species-list__title {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 var(--space-3) 0;
+}
+
+.species-list__sort {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.species-list__sort-btn {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--text2);
+  background-color: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  padding: var(--space-1) var(--space-3);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.species-list__sort-btn:hover {
+  color: var(--text);
+  border-color: var(--text3);
+}
+
+.species-list__sort-btn--active {
+  color: var(--bg);
+  background-color: var(--accent);
+  border-color: var(--accent);
+}
+
+.species-list__sort-btn--active:hover {
+  background-color: var(--text);
+  border-color: var(--text);
+}
+
+.species-list__items {
+  flex: 1;
+}
+
+.species-list__empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-8) var(--space-6);
+  text-align: center;
+}
+
+.species-list__error {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-8) var(--space-6);
+  text-align: center;
+  gap: var(--space-4);
+}
+
+.species-list__error-text {
+  font-size: var(--text-base);
+  color: var(--text2);
+  margin: 0;
+}
+
+.species-list__retry {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--accent);
+  background-color: transparent;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-4);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.species-list__retry:hover {
+  background-color: var(--accent);
+  color: var(--bg);
+}
+
+/* =========================================
+ * Species Skeleton
+ * ========================================= */
+
+.species-list__skeleton {
+  padding: 0;
+}
+
+.species-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border);
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+.species-skeleton__main {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.species-skeleton__info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  flex: 1;
+}
+
+.species-skeleton__common {
+  height: 18px;
+  width: 60%;
+  background-color: var(--bg3);
+  border-radius: var(--radius-sm);
+}
+
+.species-skeleton__sci {
+  height: 13px;
+  width: 45%;
+  background-color: var(--bg3);
+  border-radius: var(--radius-sm);
+}
+
+.species-skeleton__count {
+  height: 20px;
+  width: 24px;
+  background-color: var(--bg3);
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+
+.species-skeleton__meta {
+  display: flex;
+  gap: var(--space-4);
+}
+
+.species-skeleton__time,
+.species-skeleton__conf {
+  height: 11px;
+  width: 60px;
+  background-color: var(--bg3);
+  border-radius: var(--radius-sm);
+}
+
+@keyframes skeleton-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* =========================================
+ * Live Feed Styles
+ * ========================================= */
+
+.live-feed {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  padding-bottom: calc(var(--space-8) + 60px + env(safe-area-inset-bottom));
+}
+
+/* Overflow indicator when more detections exist */
+.live-feed__overflow {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text3);
+  text-align: center;
+  padding: var(--space-4) var(--space-2);
+  letter-spacing: 0.02em;
+}

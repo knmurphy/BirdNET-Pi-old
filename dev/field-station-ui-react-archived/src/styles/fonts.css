@@ -1,0 +1,71 @@
+/**
+ * Font Face Definitions
+ * 
+ * Google Fonts loaded via CDN in index.html for optimal caching.
+ * These @font-face declarations provide fallback definitions.
+ * 
+ * Fonts used:
+ * - DM Mono (400, 500) - Station name, labels, timestamps
+ * - Fraunces (400, 700) - Species common name (display)
+ * - Source Serif 4 (400, 400 italic) - Body text, scientific names
+ */
+
+/* Fallback system fonts while Google Fonts load */
+:root {
+  --font-mono: 'DM Mono', 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  --font-display: 'Fraunces', Georgia, 'Times New Roman', serif;
+  --font-body: 'Source Serif 4', Georgia, 'Times New Roman', serif;
+}
+
+/* Optional: Self-hosted @font-face declarations if CDN is unavailable */
+/* Uncomment and add font files to /public/fonts/ if needed */
+
+/*
+@font-face {
+  font-family: 'DM Mono';
+  src: url('/fonts/DMMono-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'DM Mono';
+  src: url('/fonts/DMMono-Medium.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Fraunces';
+  src: url('/fonts/Fraunces-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Fraunces';
+  src: url('/fonts/Fraunces-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Source Serif 4';
+  src: url('/fonts/SourceSerif4-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Source Serif 4';
+  src: url('/fonts/SourceSerif4-Italic.woff2') format('woff2');
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+*/

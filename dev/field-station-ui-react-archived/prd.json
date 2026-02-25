@@ -1,0 +1,87 @@
+{
+  "goal": "Implement Field Station OS UI Phase 1 (MVP) - Mobile-first PWA with SSE detection feed",
+  "prd_path": "../field-station-ui-prd.md",
+  "completed_at": "2026-02-25T21:30:00Z",
+  "tasks": [
+    {
+      "id": "1",
+      "title": "Project scaffolding: Vite + React 18 + TypeScript",
+      "description": "Create new Vite project with React, TypeScript. Install dependencies: react-router-dom, @tanstack/react-query, vite-plugin-pwa. Configure vite.config.ts for PWA support.",
+      "status": "completed",
+      "priority": 0,
+      "dependencies": []
+    },
+    {
+      "id": "2",
+      "title": "Design system: CSS custom properties + typography",
+      "description": "Create CSS variables for color palette (dark theme), load Google Fonts (DM Mono, Fraunces, Source Serif 4), set up base styles.",
+      "status": "completed",
+      "priority": 0,
+      "dependencies": []
+    },
+    {
+      "id": "3",
+      "title": "TypeScript types for API",
+      "description": "Define interfaces: Detection, ClassifierConfig, SpeciesSummary, SystemResponse, TodaySummaryResponse. Create src/types/index.ts.",
+      "status": "completed",
+      "priority": 0,
+      "dependencies": []
+    },
+    {
+      "id": "4",
+      "title": "SSE hook with React Query integration",
+      "description": "Implement useSSE hook that connects to /api/events, handles detection events, updates React Query cache, tracks connection state, handles deduplication.",
+      "status": "completed",
+      "priority": 0,
+      "dependencies": ["3"]
+    },
+    {
+      "id": "5",
+      "title": "App structure: Router + Tabs + Header",
+      "description": "Set up React Router with 5 tabs (Live, Species, History, Stats, Settings). Create Header component with station name and connection indicator. Create placeholder screens.",
+      "status": "completed",
+      "priority": 0,
+      "dependencies": ["2"]
+    },
+    {
+      "id": "6",
+      "title": "Live Screen: Detection feed",
+      "description": "Create DetectionCard component with species name, confidence bar, time, classifier badge. Implement virtualized reverse-chronological list. Wire to SSE via React Query.",
+      "status": "completed",
+      "priority": 0,
+      "dependencies": ["4", "3"]
+    },
+    {
+      "id": "7",
+      "title": "Live Screen: Connection status indicator",
+      "description": "Add pulsing dot in header (green/amber/red). Show reconnect/disconnect banners. Reflect EventSource readyState.",
+      "status": "completed",
+      "priority": 0,
+      "dependencies": ["4", "5"]
+    },
+    {
+      "id": "8",
+      "title": "Species Screen: Today's species list",
+      "description": "Fetch from /api/species/today. Display species rows with name, count, last seen, peak confidence. Implement sort options.",
+      "status": "completed",
+      "priority": 1,
+      "dependencies": ["3"]
+    },
+    {
+      "id": "9",
+      "title": "Error/Empty/Loading states",
+      "description": "Add empty states ('No detections yet'), error states with retry buttons, loading skeletons for all implemented screens.",
+      "status": "completed",
+      "priority": 1,
+      "dependencies": ["6", "8"]
+    },
+    {
+      "id": "10",
+      "title": "PWA manifest and icons",
+      "description": "Create manifest.json with app name, colors, icons. Configure vite-plugin-pwa. Create placeholder icons (192x192, 512x512).",
+      "status": "completed",
+      "priority": 2,
+      "dependencies": ["1"]
+    }
+  ]
+}

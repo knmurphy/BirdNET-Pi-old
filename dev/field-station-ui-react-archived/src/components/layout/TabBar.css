@@ -1,0 +1,67 @@
+/**
+ * TabBar Styles
+ */
+
+.tab-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: var(--z-sticky);
+
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+
+  padding: var(--space-2) 0;
+  padding-bottom: max(var(--space-2), env(safe-area-inset-bottom));
+
+  background-color: var(--bg);
+  border-top: 1px solid var(--border);
+}
+
+.tab-bar__item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+
+  padding: var(--space-2) var(--space-3);
+
+  color: var(--text2);
+  text-decoration: none;
+
+  transition: color var(--transition-fast);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tab-bar__item:hover {
+  color: var(--text);
+}
+
+.tab-bar__item--active {
+  color: var(--accent);
+}
+
+.tab-bar__icon {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.tab-bar__label {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.02em;
+}
+
+/* Active state indicator */
+.tab-bar__item--active .tab-bar__icon {
+  text-shadow: 0 0 8px var(--accent);
+}
+
+/* Mobile touch feedback */
+@media (hover: none) {
+  .tab-bar__item:active {
+    opacity: 0.7;
+  }
+}

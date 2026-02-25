@@ -1,0 +1,94 @@
+/**
+ * Header Styles
+ */
+
+.header {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  padding: var(--space-3) var(--space-4);
+
+  background-color: var(--bg);
+  border-bottom: 1px solid var(--border);
+
+  font-family: var(--font-mono);
+}
+
+.header-station {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.station-name {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--text);
+  letter-spacing: 0.02em;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.header-time {
+  font-size: var(--text-sm);
+  color: var(--text2);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Connection Status Indicator */
+.connection-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+}
+
+.connection-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-full);
+  background-color: var(--text3);
+}
+
+.connection-dot--connected {
+  background-color: var(--accent);
+  animation: pulse-green 2s ease-in-out infinite;
+}
+
+.connection-dot--reconnecting {
+  background-color: var(--amber);
+  animation: pulse-amber 1s ease-in-out infinite;
+}
+
+.connection-dot--disconnected {
+  background-color: var(--red);
+  /* No animation for disconnected state */
+}
+
+@keyframes pulse-green {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(200, 230, 160, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(200, 230, 160, 0);
+  }
+}
+
+@keyframes pulse-amber {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(232, 197, 71, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(232, 197, 71, 0);
+  }
+}
