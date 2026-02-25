@@ -4,10 +4,35 @@ $user = shell_exec("awk -F: '/1000/{print $1}' /etc/passwd");
 $user = trim($user);
 $home = shell_exec("awk -F: '/1000/{print $6}' /etc/passwd");
 $home = trim($home);
-if(!isset($_SESSION['behind'])) {
-  $fetch = shell_exec("sudo -u".$user." git -C ".$home."/BirdNET-Pi fetch 2>&1");
-  $_SESSION['behind'] = trim(shell_exec("sudo -u".$user." git -C ".$home."/BirdNET-Pi status | sed -n '2 p' | cut -d ' ' -f 7"));
-  if(isset($_SESSION['behind'])&&intval($_SESSION['behind']) >= 99) {?>
+
+// Cache the git-behind check in a temp file so it never blocks a page load.
+// The check runs at most once per hour; until then the cached value is used.
+$updateCacheFile = sys_get_temp_dir() . '/bnp_update_cache.txt';
+$updateCacheTTL  = 3600; // seconds (1 hour)
+if (!isset($_SESSION['behind'])) {
+  if (file_exists($updateCacheFile) && (time() - filemtime($updateCacheFile)) < $updateCacheTTL) {
+    // Cache is fresh — read it instantly, no network call
+    $_SESSION['behind'] = trim(file_get_contents($updateCacheFile));
+  } else {
+    // Cache is stale — run git fetch in the background (non-blocking) and
+    // write the result to the cache file for the next request to pick up.
+    // For this request use the stale cached value (if any) or empty string.
+    $_SESSION['behind'] = file_exists($updateCacheFile) ? trim(file_get_contents($updateCacheFile)) : '';
+    // Use a lock file (created with O_CREAT|O_EXCL — atomic on POSIX) to ensure
+    // only one background fetch process runs at a time, preventing both redundant
+    // git network calls and concurrent writes to the cache file.
+    $lockFile = sys_get_temp_dir() . '/bnp_update_cache.lock';
+    $lh = @fopen($lockFile, 'x'); // fails atomically if lock already exists
+    if ($lh !== false) {
+      fclose($lh);
+      $fetchCmd = "sudo -u ".escapeshellarg($user)." git -C ".escapeshellarg($home."/BirdNET-Pi")." fetch 2>/dev/null"
+                . " && sudo -u ".escapeshellarg($user)." git -C ".escapeshellarg($home."/BirdNET-Pi")." status"
+                . " | sed -n '2 p' | cut -d ' ' -f 7 > ".escapeshellarg($updateCacheFile)
+                . " ; rm -f ".escapeshellarg($lockFile)." &";
+      exec($fetchCmd);
+    }
+  }
+  if(isset($_SESSION['behind']) && intval($_SESSION['behind']) >= 99) {?>
   <style>
   .updatenumber { 
     width:30px !important;
@@ -30,31 +55,16 @@ body::-webkit-scrollbar {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <div class="topnav" id="myTopnav">
 <form action="" method="GET" id="views">
-  <button type="submit" name="view" value="Overview" form="views">Overview</button>
-</form>
-<form action="" method="GET" id="views">
-  <button type="submit" name="view" value="Today's Detections" form="views">Today's Detections</button>
-</form>
-<form action="" method="GET" id="views">
-  <button type="submit" name="view" value="Spectrogram" form="views">Spectrogram</button>
-</form>
-<form action="" method="GET" id="views">
-  <button type="submit" name="view" value="Species Stats" form="views">Best Recordings</button>
-</form>
-<form action="" method="GET" id="views">
-  <button type="submit" name="view" value="Streamlit" form="views">Species Stats</button>
-</form>
-<form action="" method="GET" id="views">
-  <button type="submit" name="view" value="Daily Charts" form="views">Daily Charts</button>
-</form>
-<form action="" method="GET" id="views">
-  <button type="submit" name="view" value="Recordings" form="views">Recordings</button>
-</form>
-<form action="" method="GET" id="views">
-  <button type="submit" name="view" value="View Log" form="views">View Log</button>
-</form>
-<form action="" id="toolsbtn" method="GET" id="views">
-  <button type="submit" name="view" value="Tools" form="views">Tools<?php if(isset($_SESSION['behind']) && intval($_SESSION['behind']) >= 50 && ($config['SILENCE_UPDATE_INDICATOR'] != 1)){ $updatediv = ' <div class="updatenumber">'.$_SESSION["behind"].'</div>'; } else { $updatediv = ""; } echo $updatediv; ?></button>
+  <button type="submit" name="view" value="Dashboard">Dashboard</button>
+  <button type="submit" name="view" value="Overview">Overview</button>
+  <button type="submit" name="view" value="Today's Detections">Today's Detections</button>
+  <button type="submit" name="view" value="Spectrogram">Spectrogram</button>
+  <button type="submit" name="view" value="Species Stats">Best Recordings</button>
+  <button type="submit" name="view" value="Streamlit">Species Stats</button>
+  <button type="submit" name="view" value="Daily Charts">Daily Charts</button>
+  <button type="submit" name="view" value="Recordings">Recordings</button>
+  <button type="submit" name="view" value="View Log">View Log</button>
+  <button type="submit" name="view" value="Tools">Tools<?php if(isset($_SESSION['behind']) && intval($_SESSION['behind']) >= 50 && ($config['SILENCE_UPDATE_INDICATOR'] != 1)){ $updatediv = ' <div class="updatenumber">'.$_SESSION["behind"].'</div>'; } else { $updatediv = ""; } echo $updatediv; ?></button>
 </form>
 <button href="javascript:void(0);" class="icon" onclick="myFunction()"><img src="images/menu.png"></button>
 </div>
@@ -97,6 +107,7 @@ function copyOutput(elem) {
 <div class="views">
 <?php
 if(isset($_GET['view'])){
+  if($_GET['view'] == "Dashboard"){include('dashboard.php');}
   if($_GET['view'] == "System Info"){echo "<iframe src='phpsysinfo/index.php'></iframe>";}
   if($_GET['view'] == "System Controls"){include('scripts/system_controls.php');}
   if($_GET['view'] == "Services"){include('scripts/service_controls.php');}
@@ -316,7 +327,7 @@ if(isset($_GET['view'])){
     }
   }
   ob_end_flush();
-} else {include('overview.php');}
+} else {include('dashboard.php');}
 ?>
 <script>
 function myFunction() {

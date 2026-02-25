@@ -817,3 +817,182 @@ pre#timer.bash {
 #ddnewline::before {
    content: none;
 }
+
+/* ── Dashboard widget styles ─────────────────────────────────────────── */
+
+.dashboard {
+  padding: 16px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.dashboard-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.dashboard-header h2 {
+  margin: 0;
+  font-size: x-large;
+}
+
+.dash-config-btn {
+  background: rgb(219, 255, 235) !important;
+  padding: 7px 12px !important;
+  border-radius: 4px;
+  font-size: small;
+  box-shadow: 0px 1px 4px rgba(0,0,0,0.12);
+}
+
+.dash-config-btn:hover {
+  background: rgb(159, 226, 155) !important;
+  color: black;
+}
+
+.dash-config-panel {
+  display: none;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  background: rgb(219, 255, 235);
+  border-radius: 6px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  box-shadow: 0px 1px 6px rgba(0,0,0,0.08);
+}
+
+.dash-config-panel.dash-config-open {
+  display: flex;
+}
+
+.dash-config-panel strong {
+  width: 100%;
+  font-size: small;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #444;
+}
+
+.dash-config-panel label {
+  font-weight: normal;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  padding: 4px 10px;
+  border-radius: 4px;
+  background: rgba(255,255,255,0.55);
+  font-size: small;
+  transition: background 0.15s;
+}
+
+.dash-config-panel label:hover {
+  background: rgba(255,255,255,0.85);
+}
+
+.widget-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.widget {
+  background: rgb(219, 255, 235);
+  border-radius: 8px;
+  padding: 16px 14px;
+  box-shadow: 0px 2px 8px rgba(0,0,0,0.09);
+  text-align: center;
+  transition: box-shadow 0.2s;
+}
+
+.widget:hover {
+  box-shadow: 0px 4px 14px rgba(0,0,0,0.14);
+}
+
+.widget-wide {
+  grid-column: 1 / -1;
+}
+
+.widget-chart {
+  grid-column: span 2;
+  min-width: 0;
+}
+
+.widget-label {
+  font-size: x-small;
+  color: #555;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  margin-bottom: 8px;
+  font-weight: bold;
+}
+
+.widget-value {
+  font-size: xx-large;
+  font-weight: bold;
+  color: #2a7a3a;
+  line-height: 1.1;
+}
+
+.widget-value-sm {
+  font-size: large;
+}
+
+.widget-meta {
+  font-size: small;
+  color: #666;
+  margin-top: 5px;
+  font-weight: normal;
+}
+
+.widget-link {
+  font-size: xx-large !important;
+  font-weight: bold !important;
+  color: #04AA6D !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  text-decoration: underline;
+  text-decoration-color: rgba(4,170,109,0.35);
+  cursor: pointer;
+}
+
+.widget-link:hover {
+  color: #028a57 !important;
+}
+
+.widget-value-sm .widget-link {
+  font-size: large !important;
+}
+
+.widget-no-data {
+  padding: 10px;
+  color: #777;
+  font-style: italic;
+}
+
+@media screen and (max-width: 700px) {
+  .widget-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .widget-chart {
+    grid-column: 1 / -1;
+  }
+}
+
+@media screen and (max-width: 380px) {
+  .widget-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .widget {
+    padding: 12px 10px;
+  }
+  .widget-value {
+    font-size: x-large;
+  }
+}
+/* ── End dashboard widget styles ─────────────────────────────────────── */
