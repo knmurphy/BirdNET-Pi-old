@@ -89,3 +89,23 @@ All 4 tests passed.
 
 All 5 tests now pass.
 
+
+
+## TODO: Implement Design System
+
+**Deferred until functionality is complete.**
+
+Design system from PRD Section 9:
+- Dark theme CSS variables (#0D0F0B background, #F0EAD2 text, etc.)
+- Typography: DM Mono, Fraunces, Source Serif 4
+- Widget cards with proper styling
+- Mobile-first responsive layout
+- Bottom tab navigation
+- Confidence color coding (green/amber/red)
+
+**When ready:**
+- Create CSS file with design tokens
+- Update FastHTML components to use CSS classes
+- Add Google Fonts
+- Test responsive breakpoints
+

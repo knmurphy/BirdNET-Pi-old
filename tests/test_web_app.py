@@ -86,3 +86,70 @@ class TestDashboardWidgets:
         content = str(_dashboard_content())
         # Should show latest detection section
         assert "Latest" in content or "latest" in content
+
+
+class TestNavigationShell:
+    """Test the navigation shell structure."""
+
+    def test_shell_has_header_with_title(self):
+        """Shell should have a header with station title."""
+        from homepage.web_app import _shell
+        shell = str(_shell("test content", "/app/dashboard"))
+        assert "Field Station" in shell or "Station" in shell
+
+    def test_shell_has_bottom_tabs(self):
+        """Shell should have bottom navigation with tabs."""
+        from homepage.web_app import _shell
+        shell = str(_shell("test content", "/app/dashboard"))
+        # Should have navigation tabs
+        assert "Dashboard" in shell
+
+
+class TestDetectionsRoute:
+    """Test the detections route."""
+
+    def test_detections_route_exists(self):
+        """The /app/detections route should be registered."""
+        from homepage.web_app import app
+        routes = [r.path for r in app.routes]
+        assert "/app/detections" in routes
+
+    def test_detections_content_shows_species(self):
+        """Detections content should show species names."""
+        from homepage.web_app import _detections_content
+        content = str(_detections_content())
+        # Should contain detections header
+        assert "Detection" in content
+
+
+class TestSpeciesRoute:
+    """Test the species route."""
+
+    def test_species_route_exists(self):
+        """The /app/species route should be registered."""
+        from homepage.web_app import app
+        routes = [r.path for r in app.routes]
+        assert "/app/species" in routes
+
+    def test_species_content_shows_species(self):
+        """Species content should show species information."""
+        from homepage.web_app import _species_content
+        content = str(_species_content())
+        assert "Species" in content
+
+
+
+class TestStatsRoute:
+    """Test the stats route."""
+
+    def test_stats_route_exists(self):
+        """The /app/stats route should be registered."""
+        from homepage.web_app import app
+        routes = [r.path for r in app.routes]
+        assert "/app/stats" in routes
+
+    def test_stats_content_shows_stats(self):
+        """Stats content should show statistics."""
+        from homepage.web_app import _stats_content
+        content = str(_stats_content())
+        assert "Stat" in content or "stat" in content
