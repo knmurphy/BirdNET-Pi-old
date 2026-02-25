@@ -91,21 +91,64 @@ All 5 tests now pass.
 
 
 
-## TODO: Implement Design System
+## TDD Cycle 3: Settings Route
 
-**Deferred until functionality is complete.**
+**RED:** Added tests for /app/settings route:
+- test_settings_route_exists
+- test_settings_content_shows_settings
 
-Design system from PRD Section 9:
-- Dark theme CSS variables (#0D0F0B background, #F0EAD2 text, etc.)
-- Typography: DM Mono, Fraunces, Source Serif 4
-- Widget cards with proper styling
-- Mobile-first responsive layout
-- Bottom tab navigation
-- Confidence color coding (green/amber/red)
+**GREEN:** Implemented:
+- settings() route handler
+- _settings_content() function
 
-**When ready:**
-- Create CSS file with design tokens
-- Update FastHTML components to use CSS classes
-- Add Google Fonts
-- Test responsive breakpoints
+All 19 tests now pass.
 
+
+## TDD Cycle 4: Design System Implementation
+
+Implemented dark theme design system from PRD Section 9:
+
+**APP_CSS constant with:**
+- Color palette (--bg: #0D0F0B, --text: #F0EAD2, etc.)
+- Spacing scale (4px base: --space-1 through --space-16)
+- Border radius (--radius-sm/md/lg/full)
+- Typography (--font-mono/display/body)
+- Shadows (--shadow-sm/md/lg)
+- Base styles (reset, body, links)
+
+**Component styles:**
+- .app-shell (flex column, min-height 100dvh)
+- .topbar (header with mono font)
+- #content (main scrollable area)
+- .bottom-nav (mobile navigation)
+- .widget / .widget-grid (card styling)
+- .widget-label / .widget-value (typography)
+- .conf-high/medium/low (confidence colors)
+
+**Responsive design:**
+- Mobile-first with @media (max-width: 640px)
+- Bottom nav hidden on desktop, visible on mobile
+- Widget grid adjusts columns
+
+**Google Fonts:**
+- DM Mono (400, 500)
+- Fraunces (400, 700)
+- Source Serif 4 (400, italic)
+- Preconnect hints for performance
+
+**_shell() updated:**
+- Returns Html(Head(...), Body(...))
+- Full HTML document structure
+- Meta charset and viewport
+- Title "Field Station"
+
+All 19 tests passing.
+
+
+## TODO: Future Enhancements
+
+- More stats (hourly activity chart, system health)
+- Audio playback on detections
+- Apply .widget classes to dashboard content
+- SSE for real-time updates
+- PWA manifest and service worker
