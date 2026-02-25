@@ -8,6 +8,7 @@ Following TDD: This code is written to pass tests, then refactored.
 """
 import os
 import sqlite3
+import logging
 from datetime import date, datetime
 
 from fasthtml.common import (
@@ -196,7 +197,8 @@ def get_today_detection_count() -> int:
         count = cursor.fetchone()[0]
         con.close()
         return count
-    except Exception:
+    except Exception as e:
+        logging.error(f"Error getting today's detection count: {e}")
         return 0
 
 
@@ -212,7 +214,8 @@ def get_today_species_count() -> int:
         count = cursor.fetchone()[0]
         con.close()
         return count
-    except Exception:
+    except Exception as e:
+        logging.error(f"Error getting today's species count: {e}")
         return 0
 
 
@@ -229,7 +232,8 @@ def get_latest_detection():
         if row:
             return dict(row)
         return None
-    except Exception:
+    except Exception as e:
+        logging.error(f"Error getting latest detection: {e}")
         return None
 
 
@@ -371,7 +375,8 @@ def _detections_content():
             for row in rows
         ]
         return Div(H2("Today's Detections"), *items)
-    except Exception:
+    except Exception as e:
+        logging.error(f"Error loading detections: {e}")
         return Div(H2("Today's Detections"), P("Unable to load detections."))
 
 
@@ -408,7 +413,8 @@ def _species_content():
             for r in rows
         ]
         return Div(H2("Today's Species"), *items)
-    except Exception:
+    except Exception as e:
+        logging.error(f"Error loading species: {e}")
         return Div(H2("Today's Species"), P("Error loading species."))
 
 
@@ -420,7 +426,8 @@ def get_total_detection_count() -> int:
         count = cursor.fetchone()[0]
         con.close()
         return count
-    except Exception:
+    except Exception as e:
+        logging.error(f"Error getting total detection count: {e}")
         return 0
 
 
@@ -432,7 +439,8 @@ def get_total_species_count() -> int:
         count = cursor.fetchone()[0]
         con.close()
         return count
-    except Exception:
+    except Exception as e:
+        logging.error(f"Error getting total species count: {e}")
         return 0
 
 
