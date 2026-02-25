@@ -30,6 +30,9 @@ body::-webkit-scrollbar {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <div class="topnav" id="myTopnav">
 <form action="" method="GET" id="views">
+  <button type="submit" name="view" value="Dashboard" form="views">Dashboard</button>
+</form>
+<form action="" method="GET" id="views">
   <button type="submit" name="view" value="Overview" form="views">Overview</button>
 </form>
 <form action="" method="GET" id="views">
@@ -97,6 +100,7 @@ function copyOutput(elem) {
 <div class="views">
 <?php
 if(isset($_GET['view'])){
+  if($_GET['view'] == "Dashboard"){include('dashboard.php');}
   if($_GET['view'] == "System Info"){echo "<iframe src='phpsysinfo/index.php'></iframe>";}
   if($_GET['view'] == "System Controls"){include('scripts/system_controls.php');}
   if($_GET['view'] == "Services"){include('scripts/service_controls.php');}
@@ -316,7 +320,7 @@ if(isset($_GET['view'])){
     }
   }
   ob_end_flush();
-} else {include('overview.php');}
+} else {include('dashboard.php');}
 ?>
 <script>
 function myFunction() {
