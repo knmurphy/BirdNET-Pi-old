@@ -220,6 +220,7 @@ http:// ${BIRDNETPI_URL} {
   php_fastcgi unix//run/php/php7.4-fpm.sock
   reverse_proxy /log* localhost:8080
   reverse_proxy /stats* localhost:8501
+  reverse_proxy /app* localhost:8502
   reverse_proxy /terminal* localhost:8888
 }
 EOF
@@ -238,6 +239,7 @@ http:// ${BIRDNETPI_URL} {
   php_fastcgi unix//run/php/php7.4-fpm.sock
   reverse_proxy /log* localhost:8080
   reverse_proxy /stats* localhost:8501
+  reverse_proxy /app* localhost:8502
   reverse_proxy /terminal* localhost:8888
 }
 EOF
@@ -282,6 +284,32 @@ WantedBy=multi-user.target
 EOF
   ln -sf $HOME/BirdNET-Pi/templates/birdnet_stats.service /usr/lib/systemd/system
   systemctl enable birdnet_stats.service
+}
+
+install_web_app_service() {
+  echo "Installing the birdnet_web_app.service (FastHTML UI)"
+  # Install python-fasthtml into the existing venv; exit on failure so the
+  # systemd service file is not written with a broken Python environment.
+  $HOME/BirdNET-Pi/birdnet/bin/pip install python-fasthtml --quiet
+  # Download HTMX (self-hosted, no CDN dependency at runtime)
+  curl -sL "https://unpkg.com/htmx.org@2.0.0/dist/htmx.min.js" \
+       -o "$HOME/BirdNET-Pi/homepage/static/htmx.min.js"
+  cat << EOF > $HOME/BirdNET-Pi/templates/birdnet_web_app.service
+[Unit]
+Description=BirdNET-Pi FastHTML Web Application
+After=network.target
+[Service]
+Restart=on-failure
+RestartSec=5
+Type=simple
+User=${USER}
+WorkingDirectory=$HOME/BirdNET-Pi/homepage
+ExecStart=$HOME/BirdNET-Pi/birdnet/bin/python3 $HOME/BirdNET-Pi/homepage/web_app.py
+[Install]
+WantedBy=multi-user.target
+EOF
+  ln -sf $HOME/BirdNET-Pi/templates/birdnet_web_app.service /usr/lib/systemd/system
+  systemctl enable birdnet_web_app.service
 }
 
 install_spectrogram_service() {
@@ -438,6 +466,7 @@ install_services() {
   install_birdnet_analysis
   install_birdnet_server
   install_birdnet_stats_service
+  install_web_app_service
   install_recording_service
   install_custom_recording_service # But does not enable
   install_extraction_service

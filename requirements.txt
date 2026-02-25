@@ -12,5 +12,6 @@ streamlit
 plotly
 apprise
 paho-mqtt
+python-fasthtml
 pytest==7.1.2
 pytest-mock==3.7.0

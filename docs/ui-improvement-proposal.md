@@ -1,5 +1,41 @@
 # BirdNET-Pi UI Improvement Proposal
 
+## TL;DR — The "Two Birds, One Stone" Answer
+
+**FastHTML** (Python).
+
+Here is why it solves both problems simultaneously:
+
+| Problem | How FastHTML solves it |
+|---------|----------------------|
+| **Slow, iframe-based navigation** | FastHTML uses HTMX under the hood — every nav click is a partial-page swap, no iframe, no full-page reload. |
+| **PHP codebase the maintainer wants to replace** | FastHTML _is_ Python. It aligns directly with Nachtzuster's stated goal: "I would like an overhaul that does away with the PHP code and moves to some Python web framework (flask, FastHTML, …)." |
+
+Additional reasons it fits this specific project:
+
+- **Python is already the backend language.** `server.py` (TFLite inference), `plotly_streamlit.py` (charts), `utils/notifications.py` (Apprise) — the entire processing stack is Python. FastHTML makes the web tier match.
+- **No build toolchain.** No Node.js, no npm, no Webpack. `pip install python-fasthtml` and you are running. This matters on a Raspberry Pi.
+- **Same SQLite database.** FastHTML routes connect to `~/BirdNET-Pi/scripts/birds.db` directly using the standard `sqlite3` module — no schema changes, no migration.
+- **Proven by BirdNET-Go.** BirdNET-Go ran HTMX (the same engine FastHTML uses) before migrating to Svelte 5. The HTMX approach is proven for this class of app.
+- **Incremental migration.** The PHP app continues to run. FastHTML starts at `/app/*`; Caddy routes both. Replace view-by-view. Roll back anytime.
+- **A concrete proof-of-concept is already in this branch** — see `homepage/web_app.py`.
+
+### What the migration looks like
+
+```
+# Step 1: add one line to the Caddyfile (everything else stays the same)
+reverse_proxy /app* localhost:8502
+
+# Step 2: run the FastHTML app
+pip install python-fasthtml
+python3 homepage/web_app.py   # or add a systemd service
+
+# Step 3: point users to /app instead of /
+# The PHP app at / is still fully functional until you are ready to remove it
+```
+
+---
+
 ## Context
 
 The original issue requested "brainstorming a better UI system — faster, snappier,
@@ -163,44 +199,74 @@ added in this branch is a starting point.)*
 
 ## Options Evaluated
 
-### Option A — HTMX migration of the PHP codebase (recommended near-term)
+### Option A — FastHTML (Python + HTMX) ⭐ Recommended
+
+[FastHTML](https://fastht.ml) is a Python micro-framework that generates HTML
+directly from Python functions and wires HTMX navigation in automatically.
+
+**How it works:**
+
+```python
+from fasthtml.common import FastHTML, Div, H2, serve
+
+app = FastHTML()
+
+@app.get("/app/dashboard")
+def dashboard():
+    return Div(H2("Dashboard"), ...)   # returned as HTML fragment via HTMX
+```
+
+- The outer shell (`<html>/<head>/<body>`) is sent once.
+- Every nav click fires an HTMX `GET` that swaps only `<main id="content">`.
+- No iframe, no full-page reload.
+
+**The proof-of-concept** — `homepage/web_app.py` in this branch — already implements:
+- Dashboard with KPI widgets (auto-refresh spectrogram, today's chart)
+- Today's Detections table with audio playback
+- Species list (recordings)
+- Per-species detail page
+- Mobile bottom nav bar (CSS-only, no JS)
+- All connected to the existing SQLite database
+
+**Pros:**
+- Kills both birds: Python backend migration + HTMX navigation in one move.
+- No Node.js, no npm, no build step.
+- Works alongside the PHP app during migration (different path prefix).
+- The Python venv (`~/BirdNET-Pi/birdnet/`) is already on the Pi.
+
+**Cons:**
+- `python-fasthtml` is a new pip dependency.
+- Requires a new systemd service + one Caddy `reverse_proxy` line.
+- Full feature parity with PHP takes time (view-by-view migration).
+
+**Effort estimate:** Low to start (PoC is done); Medium for full feature parity.
+
+---
+
+### Option B — HTMX migration of the PHP codebase
 
 [HTMX](https://htmx.org) is a ~14 KB JavaScript library that replaces iframes and
 full-page navigations with declarative AJAX partial-page swaps. No build step. No
 Node.js. Works directly with the existing PHP templates.
 
-This is also what BirdNET-Go started with before moving to Svelte 5 — validating it
-as a sensible intermediate step.
-
-**How it changes the architecture:**
-
-```
-index.php (outer shell, permanent — loads once)
-  └── <main id="content">  ← HTMX swaps only this div on each nav click
-        only the relevant PHP fragment is fetched and inserted
-```
-
-Each PHP view file returns an HTML **fragment** (no `<html>/<body>` wrapper).
-This is already almost true — most of the view files are fragments today.
+This fixes the iframe performance problem without touching the PHP code.
 
 **Pros:**
-- Biggest single performance win: eliminates the iframe overhead entirely.
 - Backend PHP stays almost identical — minor change per view file.
 - ~14 KB dependency, no build toolchain, works on PHP 7/8.
-- Browser back/forward work correctly (HTMX `hx-push-url`).
-- Progressive — the app still works without JavaScript (normal form submits).
 - Fixes the Nachtzuster issue #556 scroll bug as a side-effect.
 
 **Cons:**
-- Requires refactoring `index.php` / `views.php` to remove the iframe shell.
-- Inline `<script>` blocks in view files need slight adjustment (scripts inside
-  HTMX-swapped content must use `htmx:afterSwap` events or be moved to the shell).
+- PHP stays as the web tier — not aligned with the Python migration direction.
+- Inline `<script>` blocks in view files need adjustment (HTMX swap events).
+- Still two languages to maintain (PHP + Python).
 
-**Effort estimate:** Medium — 1–2 days for a careful migration.
+**Recommendation:** Valid intermediate step; superseded by Option A if Python is the
+long-term goal.
 
 ---
 
-### Option B — Cherry-pick from cpieper/BirdNET-Pibird
+### Option C — Cherry-pick from cpieper/BirdNET-Pibird
 
 cpieper submitted a "Modernize v1" PR (562) to Nachtzuster in Jan 2026 with 421
 additions / 309 deletions and it was closed without review. Their fork
@@ -208,37 +274,30 @@ additions / 309 deletions and it was closed without review. Their fork
 modernisation work and is actively continued. The changes are PHP-only — safe to
 cherry-pick.
 
-**Pros:** Real, tested work that is almost mergeable. Zero new dependencies.
+**Pros:** Real, tested work. Zero new dependencies.
 
-**Cons:** Need to diff and understand the changes before applying; may conflict with
-this branch's existing work. Doesn't fix the iframe root cause.
+**Cons:** Doesn't fix the iframe root cause. Doesn't move toward Python.
 
-**Recommendation:** Worth reviewing and cherry-picking compatible parts alongside
-the HTMX migration.
+**Recommendation:** Cherry-pick only if staying entirely in PHP.
 
 ---
 
-### Option C — Python backend (Flask or FastHTML)
+### Option D — Python backend with Flask
 
-Aligns with Nachtzuster's stated future direction. Replace the PHP web tier with
-Python while keeping the same SQLite database and Caddy reverse proxy.
+Flask is more established than FastHTML; more community resources available.
 
-**Pros:** More contributors know Python than PHP; better testing story; modern
-templating (Jinja2); SQLAlchemy ORM for the database layer.
+**Pros:** More contributors know Flask; extensive documentation; Jinja2 templates.
 
 **Cons:**
-- Significant rewrite of all view files.
-- PHP is removed as a dependency but Python WSGI service is added.
-- Installation/update scripts need rewriting.
-- Multi-month effort.
+- Navigation still needs HTMX (or something else) bolted on separately.
+- Jinja2 templates are a separate language from Python code.
+- More boilerplate than FastHTML for this use case.
 
-**Recommendation:** Valid long-term goal, but not before the iframe architecture
-is fixed. Establishing HTMX navigation first makes the eventual Python migration
-easier (the view files are already decoupled fragments).
+**Recommendation:** FastHTML is Flask + HTMX in one, minus the boilerplate.
 
 ---
 
-### Option D — BirdNET-Go (Go + Svelte 5) as the reference target
+### Option E — BirdNET-Go (Go + Svelte 5) as the reference target
 
 The [BirdNET-Go](https://github.com/tphakala/birdnet-go) UI (now Svelte 5) is the
 best-in-class reference: mobile-first, real-time, animated dashboards, per-species
@@ -246,72 +305,67 @@ thresholds, multi-language. It is a complete reimplementation — no shared code
 migration path from the PHP codebase.
 
 **Recommendation:** Use as a design and feature reference; not a migration target
-unless the decision is made to abandon the PHP codebase entirely.
+unless the decision is made to abandon the PHP+Python codebase entirely.
 
 ---
 
-### Option E — Continue with PHP + vanilla JS (status quo)
+### Option F — Continue with PHP + vanilla JS (status quo)
 
-Keep the iframe architecture and improve it incrementally:
-- Add `loading="lazy"` to the iframe.
-- Use `postMessage` to avoid iframe height hacks.
-- Add `Cache-Control` headers for assets.
+Keep the iframe architecture and improve it incrementally.
 
 **Pros:** Zero new dependencies, purely additive.
 
-**Cons:** Does not fix the root problem. The iframe overhead remains. The "snappy"
-feeling the issue asked for is not achievable within an iframe model.
+**Cons:** Does not fix the root problem. The iframe overhead remains. Not aligned
+with the Python migration direction.
 
 ---
 
 ## Recommended Path Forward
 
-### Phase 1 — Fix the structural bottleneck (HTMX migration)
+### Phase 1 — FastHTML proof-of-concept → incremental migration (in progress)
 
-1. Add HTMX (self-hosted, no CDN dependency) to `homepage/static/`.
-2. Refactor `index.php` to remove the `<iframe>`. The outer shell loads once;
-   the inner `<main id="content">` is swapped by HTMX on navigation.
-3. Adapt each view PHP file to return a plain HTML fragment (most already do).
-4. ~~Move the `git fetch` update-check to an async background process.~~ *(Done in
-   this branch — the fetch now runs non-blocking in the background at most once/hr.)*
-5. Add proper `Cache-Control: public, max-age=31536000, immutable` headers for
-   the font and static assets (via Caddy config or a PHP header).
+1. ✅ `homepage/web_app.py` — FastHTML PoC serving dashboard, detections,
+   recordings, and species detail pages at `/app/*`. Reads the live SQLite DB.
+2. Add `python-fasthtml` to `requirements.txt`.
+3. Add a `web_app.service` systemd unit (mirrors the pattern of `birdnet_stats.service`).
+4. Add `reverse_proxy /app* localhost:8502` to the Caddyfile template in
+   `scripts/install_services.sh`.
+5. ~~Move the `git fetch` update-check to an async background process.~~ *(Done —
+   the fetch now runs non-blocking at most once/hr.)*
 
-**Expected outcome:** Page navigation feels instant. No more scroll-position resets.
-Back button works. Nachtzuster issue #556 is fixed as a side-effect.
-
----
-
-### Phase 2 — Dashboard and mobile UX
-
-The `dashboard.php` added in the previous commit is a good starting point. Refine it:
-
-1. **Replace the hamburger dropdown with a bottom navigation bar on mobile.**
-   On screens ≤ 640 px, show 4–5 icon+label tabs pinned to the bottom edge
-   (Dashboard / Detections / Recordings / Tools). This matches the native mobile
-   app pattern from BirdNET-Go that users already know.
-
-2. **Add a PWA manifest** (`manifest.json`) and minimal Service Worker that
-   caches the shell, CSS, font, and icons. This enables "Add to Home Screen" and
-   makes the first paint nearly instant on repeat visits.
-
-3. **Refine the dashboard widgets** based on what bird-watchers actually want to
-   see at a glance (informed by BirdNET-Go's dashboard design):
-   - Today's detection count + sparkline of detections-per-hour
-   - Most recent detection (species name + confidence + audio player)
-   - Species count today vs. all-time, with first-detection-today badge
-   - System health (disk usage, service status) — one small badge, not a full table
+**Expected outcome:** Users can navigate to `/app/dashboard` and get a fast,
+iframe-free, mobile-responsive UI. The PHP app at `/` continues working untouched.
 
 ---
 
-### Phase 3 — Polish / longer-term
+### Phase 2 — Parity + replace PHP views one-by-one
 
-- Dark mode (`prefers-color-scheme: dark`) CSS variables.
-- Swipe gestures on mobile to navigate between main views (HTMX makes this
-  easy to add with a small pointer-events handler).
+Port the remaining PHP views to FastHTML:
+- `spectrogram.php` → `/app/spectrogram`
+- `history.php` (Daily Charts) → `/app/charts` (already uses the Streamlit embed)
+- `play.php` (Recordings browser) → `/app/recordings/{date}`
+- `stats.php` (Best Recordings / Species Stats) → already done as `/app/species/{slug}`
+- Admin views (Settings, Services, System Controls) — last to migrate; PHP is fine
+  for these until parity is solid.
+
+---
+
+### Phase 3 — Remove PHP dependency
+
+Once all public views are in FastHTML:
+1. Remove `php php-fpm php-sqlite3 php-curl` from `install_services.sh`.
+2. Replace `php_fastcgi` in the Caddyfile with `reverse_proxy /app* localhost:8502`.
+3. Redirect `/` → `/app/dashboard`.
+
+---
+
+### Phase 4 — Polish (informed by BirdNET-Go's feature set)
+
+- Dark mode via `prefers-color-scheme: dark` CSS variables.
+- Per-detection first-occurrence-today badge.
+- PWA `manifest.json` + minimal Service Worker (install to home screen).
+- Multi-language support (Jinja2-style templates make i18n straightforward).
 - Notification badge on the nav when a new species is detected for the first time today.
-- Evaluate Python rewrite (Flask/FastHTML) as Nachtzuster has suggested for the
-  engine layer, keeping HTMX navigation in the frontend.
 
 ---
 
@@ -319,21 +373,21 @@ The `dashboard.php` added in the previous commit is a good starting point. Refin
 
 | Change | File | Status |
 |--------|------|--------|
-| Stats widget dashboard (card grid) | `homepage/dashboard.php` | ✅ done |
+| Stats widget dashboard (card grid) | `homepage/dashboard.php` | ✅ done (PHP) |
 | Dashboard CSS (responsive grid, widget cards) | `homepage/style.css` | ✅ done |
 | Dashboard as default view; nav item added | `homepage/views.php` | ✅ done |
 | Non-blocking git fetch (1-hour file cache) | `homepage/views.php` | ✅ done |
-| Root-cause analysis + ecosystem research | `docs/ui-improvement-proposal.md` | ✅ this file |
+| FastHTML PoC with dashboard, detections, recordings, species | `homepage/web_app.py` | ✅ done |
+| Root-cause analysis + ecosystem research + FastHTML recommendation | `docs/ui-improvement-proposal.md` | ✅ this file |
 
 ---
 
 ## What This Proposal Does NOT Recommend
 
-- **A purely visual CSS overhaul** — Nachtzuster's maintainer has explicitly said
-  this is not a priority in the PHP codebase. Any investment in visual polish should
-  happen after the iframe architecture is fixed, so it benefits from the faster navigation.
+- **A purely visual CSS overhaul of the PHP codebase** — Nachtzuster's maintainer
+  has explicitly said this is not a priority. Invest in FastHTML instead.
+- **A full SPA rewrite (React/Vue/Svelte)** — overkill for a Pi-hosted household
+  device; requires a build toolchain; BirdNET-Go already does this better.
 - **Switching to a CSS framework like Bootstrap or Tailwind** — the current
-  hand-written CSS is small and well-suited to the app. Adding a framework would
-  increase page weight significantly.
-- **Removing the SQLite backend** in favour of a REST API — the current direct-PHP
-  database pattern is appropriate for a single-device app.
+  hand-written CSS is small and well-suited. A framework would increase page weight.
+
