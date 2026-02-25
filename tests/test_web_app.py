@@ -153,3 +153,19 @@ class TestStatsRoute:
         from homepage.web_app import _stats_content
         content = str(_stats_content())
         assert "Stat" in content or "stat" in content
+
+
+class TestSettingsRoute:
+    """Test the settings route."""
+
+    def test_settings_route_exists(self):
+        """The /app/settings route should be registered."""
+        from homepage.web_app import app
+        routes = [r.path for r in app.routes]
+        assert "/app/settings" in routes
+
+    def test_settings_content_shows_settings(self):
+        """Settings content should show settings information."""
+        from homepage.web_app import _settings_content
+        content = str(_settings_content())
+        assert "Setting" in content or "setting" in content

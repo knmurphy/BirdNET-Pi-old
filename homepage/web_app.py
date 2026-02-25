@@ -227,3 +227,16 @@ def _stats_content():
         Div(f"Total Species: {total_species:,}"),
         P("System stats coming soon...")
     )
+
+@app.get("/app/settings")
+def settings():
+    """Render the settings page."""
+    return _shell(_settings_content(), "/app/settings")
+
+
+def _settings_content():
+    """Generate the settings content."""
+    return Div(
+        H2("Settings"),
+        P("System configuration coming soon..."),
+    )
