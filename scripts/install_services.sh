@@ -290,10 +290,16 @@ install_web_app_service() {
   echo "Installing the birdnet_web_app.service (FastHTML UI)"
   # Install python-fasthtml into the existing venv; exit on failure so the
   # systemd service file is not written with a broken Python environment.
-  $HOME/BirdNET-Pi/birdnet/bin/pip install python-fasthtml --quiet
+  $HOME/BirdNET-Pi/birdnet/bin/pip install python-fasthtml --quiet || {
+    echo "ERROR: Failed to install python-fasthtml. Skipping web app service."
+    return 1
+  }
   # Download HTMX (self-hosted, no CDN dependency at runtime)
   curl -sL "https://unpkg.com/htmx.org@2.0.0/dist/htmx.min.js" \
-       -o "$HOME/BirdNET-Pi/homepage/static/htmx.min.js"
+       -o "$HOME/BirdNET-Pi/homepage/static/htmx.min.js" || {
+    echo "ERROR: Failed to download htmx.min.js. The FastHTML UI will not work until it is downloaded."
+    return 1
+  }
   cat << EOF > $HOME/BirdNET-Pi/templates/birdnet_web_app.service
 [Unit]
 Description=BirdNET-Pi FastHTML Web Application

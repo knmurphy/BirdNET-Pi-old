@@ -32,6 +32,7 @@ During migration the PHP app continues to run unchanged at the root path.
 """
 
 import os
+import re
 import sqlite3
 from datetime import date, datetime
 from pathlib import Path
@@ -92,7 +93,10 @@ def _load_config() -> dict:
 
 CONFIG = _load_config()
 SITE_NAME = CONFIG.get("SITE_NAME") or "BirdNET-Pi"
-RECORDING_LENGTH = max(1, int(CONFIG.get("RECORDING_LENGTH") or 15))
+try:
+    RECORDING_LENGTH = max(1, int(CONFIG.get("RECORDING_LENGTH") or 15))
+except (ValueError, TypeError):
+    RECORDING_LENGTH = 15
 
 
 # ---------------------------------------------------------------------------
@@ -109,7 +113,8 @@ def _db() -> sqlite3.Connection:
 
 def _query(sql: str, params: tuple = ()) -> list:
     try:
-        with _db() as con:
+        con = _db()
+        with con:
             return con.execute(sql, params).fetchall()
     except Exception:
         return []
@@ -123,6 +128,19 @@ def _query_one(sql: str, params: tuple = ()):
 def _scalar(sql: str, params: tuple = (), default=0):
     row = _query_one(sql, params)
     return row[0] if row else default
+
+
+def _slug(com_name: str) -> str:
+    """Consistent URL-safe slug for a species common name used in all views."""
+    return com_name.replace(" ", "_").replace("'", "")
+
+
+def _safe_basename(filename: str) -> str:
+    """Return os.path.basename of a DB filename; return '' if it looks like a path traversal."""
+    base = os.path.basename(filename or "")
+    if ".." in base or "/" in base or "\\" in base:
+        return ""
+    return base
 
 
 # ---------------------------------------------------------------------------
@@ -376,8 +394,8 @@ def _dashboard_content():
             Div("Latest Detection", cls="widget-label"),
             Div(
                 A(latest["Com_Name"],
-                  href=f"/app/species/{latest['Com_Name'].replace(' ', '_')}",
-                  hx_get=f"/app/species/{latest['Com_Name'].replace(' ', '_')}",
+                  href=f"/app/species/{_slug(latest['Com_Name'])}",
+                  hx_get=f"/app/species/{_slug(latest['Com_Name'])}",
                   hx_target="#content", hx_push_url="true",
                   cls="widget-link",
                   style="font-size:1.4rem") if latest else "No detections yet.",
@@ -433,8 +451,11 @@ def _detections_content(limit: int = 50, offset: int = 0):
     table_rows = []
     for r in rows:
         conf_pct = round(float(r["Confidence"]) * 100)
-        com_name_slug = r["Com_Name"].replace(" ", "_").replace("'", "")
-        filename = f"/By_Date/{today}/{com_name_slug}/{r['File_Name']}"
+        com_name_slug = _slug(r["Com_Name"])
+        safe_file = _safe_basename(r["File_Name"])
+        if not safe_file:
+            continue
+        filename = f"/By_Date/{today}/{com_name_slug}/{safe_file}"
         table_rows.append(Tr(
             Td(r["Time"]),
             Td(A(r["Com_Name"],
@@ -474,8 +495,8 @@ def _recordings_content():
     table_rows = [
         Tr(
             Td(A(r["Com_Name"],
-                 href=f"/app/species/{r['Com_Name'].replace(' ','_').replace(chr(39),'')}",
-                 hx_get=f"/app/species/{r['Com_Name'].replace(' ','_').replace(chr(39),'')}",
+                 href=f"/app/species/{_slug(r['Com_Name'])}",
+                 hx_get=f"/app/species/{_slug(r['Com_Name'])}",
                  hx_target="#content", hx_push_url="true")),
             Td(f"{r['cnt']:,}"),
             Td(f"{round(float(r['maxconf'])*100)}%"),
@@ -523,8 +544,11 @@ def _species_content(slug: str):
     if not row:
         return Div(H2(f"Species: {com_name}"), P("Not found in database."))
 
-    slug_clean = com_name.replace(" ", "_").replace("'", "")
-    filename = f"/By_Date/{row['Date']}/{slug_clean}/{row['File_Name']}"
+    slug_clean = _slug(com_name)
+    safe_file = _safe_basename(row["File_Name"])
+    # Validate date is YYYY-MM-DD before embedding in a file path
+    safe_date = row["Date"] if re.match(r'^\d{4}-\d{2}-\d{2}$', row["Date"] or "") else ""
+    filename = f"/By_Date/{safe_date}/{slug_clean}/{safe_file}" if safe_date and safe_file else ""
 
     return Div(
         H2(row["Com_Name"], style="margin-bottom:4px"),
@@ -538,7 +562,8 @@ def _species_content(slug: str):
         Div(
             Div("Best Recording", cls="widget-label"),
             Audio(Source(src=filename, type="audio/mpeg"),
-                  controls=True, style="width:100%;max-width:500px"),
+                  controls=True, style="width:100%;max-width:500px")
+            if filename else P("Recording unavailable.", style="color:#777"),
             cls="widget",
             style="margin-top:4px",
         ),
@@ -551,7 +576,10 @@ def _species_content(slug: str):
 
 if FASTHTML_AVAILABLE:
 
-    app = FastHTML()
+    # static_path='static' tells FastHTML to serve files from the ./static/
+    # directory (relative to the working directory, which the systemd service
+    # sets to $HOME/BirdNET-Pi/homepage).  htmx.min.js is served at /static/htmx.min.js.
+    app = FastHTML(static_path='static')
 
     @app.get("/app/dashboard")
     def dashboard():
