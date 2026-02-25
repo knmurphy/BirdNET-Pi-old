@@ -4,10 +4,26 @@ $user = shell_exec("awk -F: '/1000/{print $1}' /etc/passwd");
 $user = trim($user);
 $home = shell_exec("awk -F: '/1000/{print $6}' /etc/passwd");
 $home = trim($home);
-if(!isset($_SESSION['behind'])) {
-  $fetch = shell_exec("sudo -u".$user." git -C ".$home."/BirdNET-Pi fetch 2>&1");
-  $_SESSION['behind'] = trim(shell_exec("sudo -u".$user." git -C ".$home."/BirdNET-Pi status | sed -n '2 p' | cut -d ' ' -f 7"));
-  if(isset($_SESSION['behind'])&&intval($_SESSION['behind']) >= 99) {?>
+
+// Cache the git-behind check in a temp file so it never blocks a page load.
+// The check runs at most once per hour; until then the cached value is used.
+$updateCacheFile = sys_get_temp_dir() . '/bnp_update_cache.txt';
+$updateCacheTTL  = 3600; // seconds (1 hour)
+if (!isset($_SESSION['behind'])) {
+  if (file_exists($updateCacheFile) && (time() - filemtime($updateCacheFile)) < $updateCacheTTL) {
+    // Cache is fresh — read it instantly, no network call
+    $_SESSION['behind'] = trim(file_get_contents($updateCacheFile));
+  } else {
+    // Cache is stale — run git fetch in the background (non-blocking) and
+    // write the result to the cache file for the next request to pick up.
+    // For this request use the stale cached value (if any) or empty string.
+    $_SESSION['behind'] = file_exists($updateCacheFile) ? trim(file_get_contents($updateCacheFile)) : '';
+    $fetchCmd = "sudo -u".escapeshellarg($user)." git -C ".escapeshellarg($home."/BirdNET-Pi")." fetch 2>/dev/null"
+              . " && sudo -u".escapeshellarg($user)." git -C ".escapeshellarg($home."/BirdNET-Pi")." status"
+              . " | sed -n '2 p' | cut -d ' ' -f 7 > ".escapeshellarg($updateCacheFile)." &";
+    exec($fetchCmd);
+  }
+  if(isset($_SESSION['behind']) && intval($_SESSION['behind']) >= 99) {?>
   <style>
   .updatenumber { 
     width:30px !important;
