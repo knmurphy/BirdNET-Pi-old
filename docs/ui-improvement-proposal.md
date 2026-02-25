@@ -36,6 +36,130 @@ python3 homepage/web_app.py   # or add a systemd service
 
 ---
 
+## Would Svelte Be an Advantage?
+
+**Short answer: yes, for the _frontend_ — but only after Python owns the backend.**
+
+Svelte is not a competing alternative to FastHTML. It is a different layer of the
+stack entirely, and whether it is an advantage depends entirely on which problem you
+are trying to solve next.
+
+### What Svelte genuinely does better
+
+BirdNET-Go chose Svelte 5 for the same use case this project has. That is not a
+coincidence. Svelte has real advantages for a real-time bird detection dashboard:
+
+**1. True reactive real-time updates (no polling required)**
+
+With FastHTML/HTMX the UI refreshes by repeatedly asking the server
+"anything new?" (polling every N seconds). With Svelte + a WebSocket, the
+server _pushes_ new detections to every connected browser instantly when they
+happen — a bird appears in the list the moment it is detected, with no delay
+and no wasted requests.
+
+For a system that detects birds every 15 seconds this matters: a 30-second
+poll means the average detection is 15 seconds stale on screen.
+
+**2. Genuinely smooth animations and transitions**
+
+Svelte's built-in `transition:` and `animate:` directives (used extensively in
+BirdNET-Go's detection list) make new birds slide in, confidence bars fill
+smoothly, and the dashboard feel alive. These are impossible to replicate
+naturally in server-rendered HTML without significant custom JavaScript.
+
+**3. Smallest JS bundle of any major framework**
+
+Svelte compiles to vanilla JS at build time — there is no Svelte runtime shipped
+to the browser. A typical Svelte app ships less JS than the equivalent HTMX app
+(which still requires htmx.min.js) and far less than React or Vue. On a slow Pi
+Wi-Fi connection, this matters for time-to-interactive.
+
+**4. Component architecture**
+
+A `<DetectionCard>`, `<AudioPlayer>`, `<SpeciesChart>`, `<SpectrogramViewer>`
+Svelte component written once is reused across every page. Changes to the audio
+player update everywhere. This is harder in server-rendered HTML fragments.
+
+**5. Type safety throughout the frontend**
+
+Svelte natively supports TypeScript. When the Python API returns a bird detection
+object, the Svelte component can be typed against that shape — catching bugs at
+build time rather than at runtime on the Pi.
+
+---
+
+### Why Svelte is not the right _first_ step for this project
+
+Svelte is a **frontend** framework. It does not replace the backend. Choosing Svelte
+means choosing:
+
+```
+Python backend (FastHTML or Flask)  ←  this choice still has to be made
+         ↕  JSON API
+Svelte frontend  ←  this is what Svelte replaces (HTMX HTML fragments)
+         ↕  browser
+```
+
+Adding Svelte before the Python backend migration is complete means:
+1. The PHP API endpoints must be converted to JSON-returning Python endpoints first.
+2. A Node.js build toolchain is required — on a development machine, not the Pi,
+   since `npm run build` is too heavy for the Pi to run reliably.
+3. The built assets (`dist/`) must be deployed to the Pi separately from the Python
+   source. This complicates the `git pull && restart` update story.
+4. Contributors now need to know both Python (backend) and JavaScript/TypeScript
+   (frontend).
+
+At this stage of the project the backend is still PHP/Python in transition. Adding
+a JS build layer on top of an unsettled backend would mean maintaining three
+languages simultaneously (PHP, Python, TypeScript/JS).
+
+---
+
+### The two-phase path that uses Svelte correctly
+
+**Phase 1 (now — FastHTML):** Replace PHP web tier with Python. Establish stable
+Python API endpoints. The HTMX navigation is good enough and needs no build toolchain.
+
+```
+Python FastHTML  →  HTML fragments via HTMX  →  browser
+```
+
+**Phase 2 (once Python backend is stable — optional Svelte frontend):** Keep the
+Python backend but replace the HTMX HTML responses with JSON responses, and replace
+the HTMX navigation with a Svelte SPA built once and served as static files by Caddy.
+
+```
+Python FastAPI/Flask  →  JSON  →  Svelte SPA (compiled, served as static files)
+```
+
+At Phase 2 the Python backend is already clean and tested. Converting FastHTML route
+handlers to return JSON instead of HTML is a small change per route. The Svelte
+frontend can then be developed and iterated on a development machine, compiled, and
+the `dist/` directory deployed to the Pi — the same pattern BirdNET-Go uses.
+
+---
+
+### Summary: FastHTML now, Svelte optionally later
+
+| Criterion | FastHTML (now) | Svelte (later) |
+|-----------|---------------|---------------|
+| Requires build toolchain | ✗ No | ✓ Yes (Node.js + Vite) |
+| Can replace PHP backend | ✓ Yes | ✗ No (frontend only) |
+| Real-time WebSocket push | ✗ No (poll-based) | ✓ Yes |
+| Smooth enter/exit animations | ✗ Limited | ✓ Native |
+| Bundle size in browser | ~14 KB (HTMX) | ~10–30 KB compiled (no runtime) |
+| Contributors need JS knowledge | ✗ No | ✓ Yes |
+| Incremental migration from PHP | ✓ Easy | ✗ Requires JSON API first |
+| Modelled by BirdNET-Go | Transitional step | ✓ Final state |
+| Right time in this project | ✓ Now | Later — after Python backend is stable |
+
+The recommendation stays **FastHTML as the first move** because it solves the
+PHP→Python migration and the navigation performance problem simultaneously with the
+least added complexity. Svelte is the realistic evolution _after_ that migration
+is complete if the project wants BirdNET-Go-level UI polish.
+
+---
+
 ## Context
 
 The original issue requested "brainstorming a better UI system — faster, snappier,
@@ -297,15 +421,40 @@ Flask is more established than FastHTML; more community resources available.
 
 ---
 
-### Option E — BirdNET-Go (Go + Svelte 5) as the reference target
+### Option E — Svelte SPA frontend (long-term evolution)
 
-The [BirdNET-Go](https://github.com/tphakala/birdnet-go) UI (now Svelte 5) is the
-best-in-class reference: mobile-first, real-time, animated dashboards, per-species
-thresholds, multi-language. It is a complete reimplementation — no shared code, no
-migration path from the PHP codebase.
+Svelte 5 is the frontend technology [BirdNET-Go](https://github.com/tphakala/birdnet-go)
+uses. It compiles to vanilla JS (no runtime), supports native WebSocket reactivity,
+and produces genuinely smooth, mobile-first UIs with built-in transition animations.
 
-**Recommendation:** Use as a design and feature reference; not a migration target
-unless the decision is made to abandon the PHP+Python codebase entirely.
+**Architecture when this makes sense:**
+
+```
+Python backend (FastHTML routes return JSON instead of HTML)
+        ↓
+Svelte SPA (compiled by Vite on a dev machine, dist/ deployed to Pi)
+        ↓
+Caddy serves dist/ as static files; API calls proxy to Python backend
+```
+
+**Pros:**
+- Real-time WebSocket push (new detections appear instantly, no polling).
+- Built-in `transition:` and `animate:` directives for fluid UI.
+- Smallest compiled JS of any major framework (no runtime overhead).
+- TypeScript support for safer API contracts.
+- Modular components (`<DetectionCard>`, `<AudioPlayer>`, `<SpeciesChart>`).
+
+**Cons:**
+- Frontend-only: still requires a Python (or other) backend.
+- Requires Node.js + Vite build toolchain on a development machine (not on the Pi).
+- `dist/` directory must be deployed separately from Python source.
+- Contributors need JavaScript/TypeScript knowledge in addition to Python.
+- Not practical until the Python API layer is stable and serving JSON.
+
+**Recommendation:** The right evolution _after_ the FastHTML migration (Option A) is
+complete. At that point the FastHTML routes can return JSON instead of HTML fragments
+with minimal code change, and Svelte handles the frontend. This is exactly the path
+BirdNET-Go took (HTMX → Svelte 5).
 
 ---
 
@@ -367,6 +516,22 @@ Once all public views are in FastHTML:
 - Multi-language support (Jinja2-style templates make i18n straightforward).
 - Notification badge on the nav when a new species is detected for the first time today.
 
+### Phase 5 — Optional: Svelte frontend (if real-time push is a priority)
+
+Once the Python backend is stable and all views serve JSON, the HTMX HTML-fragment
+responses can be swapped for a Svelte SPA:
+
+1. Add `content_type="application/json"` to FastHTML route handlers (one line each).
+2. Scaffold a Svelte 5 + Vite frontend in `frontend/` on a development machine.
+3. Build: `npm run build` → `frontend/dist/` → deploy to Pi.
+4. Add `root * /home/pi/BirdNET-Pi/frontend/dist` to the Caddyfile;
+   `reverse_proxy /api* localhost:8502` for the Python backend.
+
+This is the same split BirdNET-Go uses (Go backend + Svelte frontend). The advantage
+at this stage is real-time WebSocket push (detections appear instantly) and smooth
+animated transitions. See the "Would Svelte Be an Advantage?" section above for the
+full trade-off analysis.
+
 ---
 
 ## What Has Already Been Done in This Branch
@@ -382,12 +547,16 @@ Once all public views are in FastHTML:
 
 ---
 
-## What This Proposal Does NOT Recommend
+## What This Proposal Does NOT Recommend Doing Now
 
 - **A purely visual CSS overhaul of the PHP codebase** — Nachtzuster's maintainer
   has explicitly said this is not a priority. Invest in FastHTML instead.
-- **A full SPA rewrite (React/Vue/Svelte)** — overkill for a Pi-hosted household
-  device; requires a build toolchain; BirdNET-Go already does this better.
+- **Svelte as the first step** — Svelte is frontend-only; it cannot replace PHP
+  on its own. The Python backend must be established first. See the "Would Svelte
+  Be an Advantage?" section and Phase 5 in the roadmap for when it does make sense.
+- **A full SPA rewrite before the backend is stable** — jumping straight to a
+  Svelte SPA while the backend is still PHP would mean maintaining three languages
+  simultaneously (PHP, Python, TypeScript/JS) with no clear migration path.
 - **Switching to a CSS framework like Bootstrap or Tailwind** — the current
   hand-written CSS is small and well-suited. A framework would increase page weight.
 
