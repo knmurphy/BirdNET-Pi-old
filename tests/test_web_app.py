@@ -130,6 +130,16 @@ class TestDetectionsRoute:
         assert "Detection" in content
 
 
+
+    def test_confidence_class_helper(self):
+        """The _confidence_class helper should return correct classes."""
+        from homepage.web_app import _confidence_class
+        assert _confidence_class(0.90) == "conf-high"
+        assert _confidence_class(0.80) == "conf-high"
+        assert _confidence_class(0.70) == "conf-medium"
+        assert _confidence_class(0.50) == "conf-medium"
+        assert _confidence_class(0.40) == "conf-low"
+
 class TestSpeciesRoute:
     """Test the species route."""
 

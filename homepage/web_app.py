@@ -337,6 +337,15 @@ def detections():
     return _shell(_detections_content(), "/app/detections")
 
 
+def _confidence_class(confidence: float) -> str:
+    """Return the appropriate confidence color class."""
+    if confidence >= 0.80:
+        return "conf-high"
+    elif confidence >= 0.50:
+        return "conf-medium"
+    else:
+        return "conf-low"
+
 def _detections_content():
     """Generate the detections list content."""
     today = date.today().isoformat()
@@ -354,7 +363,10 @@ def _detections_content():
             return Div(H2("Today's Detections"), P("No detections yet today."))
 
         items = [
-            Div(f"{row['Time']} - {row['Com_Name']} ({float(row['Confidence'])*100:.0f}%)")
+            Div(
+                f"{row['Time']} - {row['Com_Name']} ({float(row['Confidence'])*100:.0f}%)",
+                cls=_confidence_class(float(row['Confidence']))
+            )
             for row in rows
         ]
         return Div(H2("Today's Detections"), *items)
