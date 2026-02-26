@@ -40,29 +40,15 @@ def get_latest():
 
 def get_todays_count_for(sci_name):
     today = datetime.now().strftime("%Y-%m-%d")
-    select_sql = "SELECT COUNT(*) FROM detections WHERE Date = DATE(?) AND Sci_Name = ?"
-    con = get_db()
-    try:
-        cur = con.execute(select_sql, (today, sci_name))
-        records = cur.fetchall()
-    except sqlite3.Error as e:
-        print(e)
-        timeim.sleep(2)
-        records = []
+    select_sql = f"SELECT COUNT(*) FROM detections WHERE Date = DATE('{today}') AND Sci_Name = '{sci_name}'"
+    records = get_records(select_sql)
     return records[0][0] if records else 0
 
 
 def get_this_weeks_count_for(sci_name):
     today = datetime.now().strftime("%Y-%m-%d")
-    select_sql = "SELECT COUNT(*) FROM detections WHERE Date >= DATE(?, '-7 day') AND Sci_Name = ?"
-    con = get_db()
-    try:
-        cur = con.execute(select_sql, (today, sci_name))
-        records = cur.fetchall()
-    except sqlite3.Error as e:
-        print(e)
-        timeim.sleep(2)
-        records = []
+    select_sql = f"SELECT COUNT(*) FROM detections WHERE Date >= DATE('{today}', '-7 day') AND Sci_Name = '{sci_name}'"
+    records = get_records(select_sql)
     return records[0][0] if records else 0
 
 
@@ -79,35 +65,18 @@ def get_summary():
 
 
 def get_species_by(sort_by=None, date=None):
-    if date is None:
-        where = ""
-        params = []
-    else:
-        where = "WHERE Date == ?"
-        params = [date]
-
+    where = "" if date is None else f'WHERE Date == "{date}"'
     if sort_by == "occurrences":
-        select_sql = ("SELECT Date, Time, File_Name, Com_Name, Sci_Name, COUNT(*) as Count, MAX(Confidence) as MaxConfidence "
+        select_sql = (f"SELECT Date, Time, File_Name, Com_Name, Sci_Name, COUNT(*) as Count, MAX(Confidence) as MaxConfidence "
                       f"FROM detections {where} GROUP BY Sci_Name ORDER BY COUNT(*) DESC;")
     elif sort_by == "confidence":
-        select_sql = ("SELECT Date, Time, File_Name, Com_Name, Sci_Name, COUNT(*) as Count, MAX(Confidence) as MaxConfidence "
+        select_sql = (f"SELECT Date, Time, File_Name, Com_Name, Sci_Name, COUNT(*) as Count, MAX(Confidence) as MaxConfidence "
                       f"FROM detections {where} GROUP BY Sci_Name ORDER BY MAX(Confidence) DESC;")
     elif sort_by == "date":
-        select_sql = ("SELECT Date, Time, File_Name, Com_Name, Sci_Name, COUNT(*) as Count, MAX(Confidence) as MaxConfidence "
+        select_sql = (f"SELECT Date, Time, File_Name, Com_Name, Sci_Name, COUNT(*) as Count, MAX(Confidence) as MaxConfidence "
                       f"FROM detections {where} GROUP BY Sci_Name ORDER BY MIN(Date) DESC, Time DESC;")
     else:
-        select_sql = ("SELECT Date, Time, File_Name, Com_Name, Sci_Name, COUNT(*) as Count, MAX(Confidence) as MaxConfidence "
+        select_sql = (f"SELECT Date, Time, File_Name, Com_Name, Sci_Name, COUNT(*) as Count, MAX(Confidence) as MaxConfidence "
                       f"FROM detections {where} GROUP BY Sci_Name ORDER BY Com_Name ASC;")
-
-    if params:
-        con = get_db()
-        try:
-            cur = con.execute(select_sql, params)
-            records = cur.fetchall()
-        except sqlite3.Error as e:
-            print(e)
-            timeim.sleep(2)
-            records = []
-    else:
-        records = get_records(select_sql)
+    records = get_records(select_sql)
     return records

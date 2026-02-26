@@ -15,7 +15,6 @@ class TestAppriseNotifications(unittest.TestCase):
 
     def setUp(self):
         db.DB_PATH = self.db_file
-        db._DB = None  # reset connection so it uses the new DB_PATH
 
     @classmethod
     def setUpClass(cls):
@@ -59,7 +58,6 @@ class TestAppriseNotifications(unittest.TestCase):
         notifications.APPRISE_CONFIG = self.apprise_config_file
 
     def tearDown(self):
-        db._DB = None  # reset connection after each test
         if os.path.exists(self.db_file):
             os.remove(self.db_file)
         if os.path.exists(self.apprise_body_file):
@@ -89,6 +87,7 @@ class TestAppriseNotifications(unittest.TestCase):
     def test_notifications(self, mock_notify, mock_load_settings):
         self.create_test_db()
         self.create_apprise_config()
+        notifications.DB_PATH = self.db_file
         settings_dict = Settings.with_defaults()
 
         mock_load_settings.return_value = settings_dict
@@ -138,6 +137,7 @@ class TestAppriseNotifications(unittest.TestCase):
     def test_notifications_excluded(self, mock_notify, mock_load_settings):
         self.create_test_db()
         self.create_apprise_config()
+        notifications.DB_PATH = self.db_file
         settings_dict = Settings.with_defaults()
         settings_dict["APPRISE_NOTIFY_EACH_DETECTION"] = "1"
 
@@ -166,6 +166,7 @@ class TestAppriseNotifications(unittest.TestCase):
     def test_notifications_included(self, mock_notify, mock_load_settings):
         self.create_test_db()
         self.create_apprise_config()
+        notifications.DB_PATH = self.db_file
         settings_dict = Settings.with_defaults()
         settings_dict["APPRISE_NOTIFY_EACH_DETECTION"] = "1"
 

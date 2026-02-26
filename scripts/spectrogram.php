@@ -1,44 +1,102 @@
 <?php
 error_reporting(E_ERROR);
 ini_set('display_errors',1);
-if(isset($_GET['ajax_csv'])) {
 
-if (file_exists('./scripts/thisrun.txt')) {
-  $config = parse_ini_file('./scripts/thisrun.txt');
-} elseif (file_exists('./scripts/firstrun.ini')) {
-  $config = parse_ini_file('./scripts/firstrun.ini');
+require_once "scripts/common.php";
+$home = get_home();
+$config = get_config();
+
+if(!empty($config['FREQSHIFT_RECONNECT_DELAY']) && is_numeric($config['FREQSHIFT_RECONNECT_DELAY'])){
+    $FREQSHIFT_RECONNECT_DELAY = ($config['FREQSHIFT_RECONNECT_DELAY']);
+}else{
+    $FREQSHIFT_RECONNECT_DELAY = 4000;
 }
-$RECS_DIR = $config["RECS_DIR"];
 
-$user = shell_exec("awk -F: '/1000/{print $1}' /etc/passwd");
-$home = shell_exec("awk -F: '/1000/{print $6}' /etc/passwd");
-$home = trim($home);
-$files = scandir($RECS_DIR."/".date('F-Y')."/".date('d-l')."/", SCANDIR_SORT_ASCENDING);
-$newest_file = $files[2];
+if(isset($_GET['ajax_csv'])) {
+  $RECS_DIR = $config["RECS_DIR"];
+  $STREAM_DATA_DIR = $RECS_DIR . "/StreamData/";
+
+  if (empty($config['RTSP_STREAM'])) {
+    $look_in_directory = $STREAM_DATA_DIR;
+    $files = scandir($look_in_directory, SCANDIR_SORT_ASCENDING);
+    //Extract the filename, positions 0 and 1 are the folder hierarchy '.' and '..'
+    $newest_file = $files[2];
+  }
+  else {
+    $look_in_directory = $STREAM_DATA_DIR;
+
+    //Load the file in the directory
+    $files = scandir($look_in_directory, SCANDIR_SORT_ASCENDING);
+
+    //Because there might be more than 1 stream, we can't really assume the file at index 2 is the latest, or even for the stream being listened to
+    //Read the RTSP_STREAM_TO_LIVESTREAM setting, then try to find that CSV file
+    if(!empty($config['RTSP_STREAM_TO_LIVESTREAM']) && is_numeric($config['RTSP_STREAM_TO_LIVESTREAM'])){
+        //The stored setting of RTSP_STREAM_TO_LIVESTREAM is 0 based, but filenames are 1's based, so just add 1 to the config value
+        //so we can match up the stream the user is listening to with the appropriate filename
+        $RTSP_STREAM_LISTENED_TO = ($config['RTSP_STREAM_TO_LIVESTREAM'] + 1);
+    }else{
+        //Setting is invalid somehow
+        //The stored setting of RTSP_STREAM_TO_LIVESTREAM is 0 based, but filenames are 1's based, so just add 1 to the config value
+        //This will be the first stream
+        $RTSP_STREAM_LISTENED_TO = 1;
+    }
+
+    //The RTSP streams contain 'RTSP_X' in the filename, were X is the stream url index in the comma separated list of RTSP streams
+    //We can use this to locate the file for this stream
+    foreach ($files as $file_idx => $stream_file_name) {
+        //Skip the folder hierarchy entries
+        if ($stream_file_name != "." && $stream_file_name != "..") {
+            //See if the filename contains the correct RTSP name, also only check .wav.csv files
+            if (stripos($stream_file_name, 'RTSP_' . $RTSP_STREAM_LISTENED_TO) !== false && stripos($stream_file_name, '.wav.json') !== false) {
+                //Found a match - set it as the newest file
+                $newest_file = $stream_file_name;
+            }
+        }
+    }
+}
 
 
+//If the newest file param has been supplied and it's the same as the newest file found
+//then stop processing
 if($newest_file == $_GET['newest_file']) {
   die();
-} 
-
-echo "file,".$newest_file."\n";
-
-$row = 1;
-if (($handle = fopen($RECS_DIR."/".date('F-Y')."/".date('d-l')."/".$newest_file.".csv", "r")) !== FALSE) {
-    while (($data = fgetcsv($handle, 1000, ",")) !== FALSE) {
-        if($row != 1){
-          $num = count($data);
-          for ($c=0; $c < $num; $c++) {
-              $exp = explode(';',$data[$c]);
-              echo (($exp[0]+$exp[1])/2).",".$exp[3].",".$exp[4]."\n";
-          }
-        }
-        $row++;
-    }
-    fclose($handle);
 }
+
+$contents = file_get_contents($look_in_directory . $newest_file);
+if ($contents !== false) {
+  $json = json_decode($contents);
+  if ($json != null) {
+    $datetime = DateTime::createFromFormat(DateTime::ISO8601, $json->{'timestamp'});
+    $now = new DateTime();
+    $interval = $now->diff($datetime);
+    $json->delay = $interval->format('%s');
+    echo json_encode($json);
+  }
+}
+
+//Kill the script so no further processing or output is done
 die();
 }
+
+//Hold the array of RTSP steams once they are exploded
+$RTSP_Stream_Config = array();
+
+//Load the birdnet config so we can read the RTSP setting
+// Valid config data
+if (is_array($config) && array_key_exists('RTSP_STREAM',$config)) {
+	if (is_null($config['RTSP_STREAM']) === false && $config['RTSP_STREAM'] !== "") {
+		$RTSP_Stream_Config_Data = explode(",", $config['RTSP_STREAM']);
+
+		//Process the stream further
+		//we need to able to ID it (just do this by position), get the hostname to show in the dropdown box
+		foreach ($RTSP_Stream_Config_Data as $stream_idx => $stream_url) {
+			//$stream_idx is the array position of the the RSP stream URL, idx of 0 is the first, 1 - second etc
+			$RTSP_stream_url = parse_url($stream_url);
+			$RTSP_Stream_Config[$stream_idx] = $RTSP_stream_url['host'];
+		}
+	}
+}
+
 ?>
 <script>  
 // CREDITS: https://codepen.io/jakealbaugh/pen/jvQweW
@@ -68,7 +126,7 @@ window.onload = function(){
   };
 
   // if user agent includes iPhone or Mac use legacy mode
-  if(((window.navigator.userAgent.includes("iPhone") || window.navigator.userAgent.includes("Mac")) && !window.navigator.userAgent.includes("Chrome")) || legacy == true) {
+  if(window.navigator.userAgent.includes("iPhone") || legacy == true) {
     document.getElementById("spectrogramimage").style.display="";
     document.body.querySelector('canvas').remove();
     document.getElementById('player').remove();
@@ -76,17 +134,12 @@ window.onload = function(){
     document.getElementsByClassName("centered")[0].remove()
 
     <?php 
-    if (file_exists('./scripts/thisrun.txt')) {
-    $config = parse_ini_file('./scripts/thisrun.txt');
-  } elseif (file_exists('./scripts/firstrun.ini')) {
-    $config = parse_ini_file('./scripts/firstrun.ini');
-  }
   $refresh = $config['RECORDING_LENGTH'];
   $time = time();
   ?>
     // every $refresh seconds, this loop will run and refresh the spectrogram image
   window.setInterval(function(){
-    document.getElementById("spectrogramimage").src = "/spectrogram.png?nocache="+Date.now();
+    document.getElementById("spectrogramimage").src = "spectrogram.png?nocache="+Date.now();
   }, <?php echo $refresh; ?>*1000);
   } else {
     document.getElementById("spectrogramimage").remove();
@@ -137,72 +190,44 @@ function applyText(text,x,y,opacity) {
   CTX.fillStyle = 'hsl(280, 100%, 10%)';
 }
 
-var add =0;
+var add=0;
 var newest_file;
-var lastbird;
 function loadDetectionIfNewExists() {
   const xhttp = new XMLHttpRequest();
   xhttp.onload = function() {
     // if there's a new detection that needs to be updated to the page
     if(this.responseText.length > 0 && !this.responseText.includes("Database")) {
-      
-      var split = this.responseText.split("\n")
-      for(var i = 1;i < split.length; i++) {
-        if(parseInt(split[i].split(",")[0]) >= 0){
-
-          newest_file =  split[0].split(",")[1]
-          //applyText(split[i].split(",")[1],document.body.querySelector('canvas').width - ((parseInt(split[i].split(",")[0]))*avgfps), (document.body.querySelector('canvas').height * 0.50))
-          
-          d1 = new Date(newest_file.split("-")[0]+"/"+newest_file.split("-")[1]+"/"+newest_file.split("-")[2]+ " "+newest_file.split("-")[4].replace(".wav",""))
-          console.log("d1 "+d1)
-          d2 = new Date(xhttp.getResponseHeader("Date"));
-          console.log("d2 "+d2)
-          timeDiff = (d2-d1)/1000;
-
-          // stagger Y placement if a new bird
-          if(split[i].split(",")[1] != lastbird || split[i].split(",")[1].length > 13) {
-            add+= 15;
-            if(add >= 60) {
-             add = 0;
-            }
-
-            //if(parseFloat(add + document.body.querySelector('canvas').height * 0.50) > document.body.querySelector('canvas').height || parseFloat(add + document.body.querySelector('canvas').height * 0.50) <= 0) {
-             // add = 0;
-            //}
-          }
-          console.log(add)
-
-          // Date csv file was created + relative detection time of bird + mic delay
-          secago = Math.abs(timeDiff) - split[i].split(",")[0] - 6.8;
-
-          x = document.body.querySelector('canvas').width - ((parseInt(secago))*avgfps);
-          // if the text is too close to the right side of the canvas and will be cut off, wait 3 seconds before adding text
-          if(x > document.body.querySelector('canvas').width - (3*avgfps)) {
-        setTimeout(function (split,i,x,add) {
-          console.log("ADD:"+add)
-          console.log(split[i])
-          console.log("originally at "+x+", now waiting 2 sec and at "+(x-(3*avgfps)))
-        applyText(split[i].split(",")[1],(x - (3*avgfps)), ((document.body.querySelector('canvas').height * 0.50) + add ), split[i].split(",")[2]);
-      }, 2000, split, i, x, add)
-      } else {
-        applyText(split[i].split(",")[1],x, ((document.body.querySelector('canvas').height * 0.50) + add ), split[i].split(",")[2])
-      }
-  
-
-          lastbird = split[i].split(",")[1]
+      const resp = JSON.parse(this.responseText);
+      newest_file = resp.file_name;
+      console.log("delay " + resp.delay);
+      for (detection of resp.detections) {
+        console.log("detection.start  " + detection.start);
+        secago = resp.delay - detection.start;
+        x = document.body.querySelector('canvas').width - (secago * avgfps);
+        y = (document.body.querySelector('canvas').height * 0.50) + add;
+        if(x > document.body.querySelector('canvas').width - (5*avgfps) && detection.common_name.length > 8) {
+          setTimeout(function (detection, x, y, x_org) {
+            console.log("originally at "+x_org+", now waiting 3 sec and at "+x);
+            applyText(detection.common_name, x, y, detection.confidence);
+          }, 3*1000, detection, x - (5*avgfps), y, x);
+        } else {
+          applyText(detection.common_name, x, y, detection.confidence);
         }
-        
+        // stagger Y placement
+        add+= 15;
+        if(add >= 60) {
+           add = 0;
+        }
       }
     }
-  }
+  };
   xhttp.open("GET", "spectrogram.php?ajax_csv=true&newest_file="+newest_file, true);
   xhttp.send();
-  
 }
 
 window.setInterval(function(){
    loadDetectionIfNewExists();
-}, 500);
+}, 1000);
 
 var compressor = undefined;
 var SOURCE;
@@ -232,6 +257,48 @@ function toggleCompression(state) {
     SOURCE.connect(gainNode);
     gainNode.connect(ANALYSER);
     gainNode.connect(ACTX.destination);
+  }
+}
+
+function toggleFreqshift(state) {
+  if (state == true) {
+    console.log("freqshift activated")
+  } else {
+    console.log("freqshift deactivated")
+  }
+
+  freqShiftReconnectDelay = <?php echo $FREQSHIFT_RECONNECT_DELAY; ?>;
+
+  var livestream_freqshift_spinner = document.getElementById('livestream_freqshift_spinner');
+  livestream_freqshift_spinner.style.display = "inline"; 
+  // Create the XMLHttpRequest object.
+  const xhr = new XMLHttpRequest();
+  // Initialize the request
+  xhr.open("GET", 'views.php?activate_freqshift_in_livestream=' + state + '&view=Advanced&submit=advanced');
+  // Send the request
+  xhr.send();
+  // Fired once the request completes successfully
+  xhr.onload = function (e) {
+    // Check if the request was a success
+    if (this.readyState === XMLHttpRequest.DONE && this.status === 200) {
+      // Restart the audio player in case it stopped working while the livestream service was restarted
+      var audio_player = document.querySelector('audio#player');
+      if (audio_player !== 'undefined') {
+        //central_controls_element.appendChild(h1_loading);
+        //Wait 2 seconds before restarting the stream
+        setTimeout(function () {
+          console.log("Restarting connection with livestream");
+          audio_player.pause();
+          audio_player.setAttribute('src', 'stream');
+          audio_player.load();
+          audio_player.play();
+
+          livestream_freqshift_spinner.style.display = "none"; 
+        },
+        freqShiftReconnectDelay
+        )
+      }
+    }
   }
 }
 
@@ -273,6 +340,7 @@ function initialize() {
     gainNode.connect(ACTX.destination);
 
     document.getElementById("compression").removeAttribute("disabled");
+    document.getElementById("freqshift").removeAttribute("disabled");
 
     console.log(SOURCE);
     const DATA = new Uint8Array(ANALYSER.frequencyBinCount);
@@ -337,9 +405,46 @@ h1 {
 }
 </style>
 
-<img id="spectrogramimage" style="width:100%;height:100%;display:none" src="/spectrogram.png?nocache=<?php echo $time;?>">
+<img id="spectrogramimage" style="width:100%;height:100%;display:none" src="spectrogram.png?nocache=<?php echo $time;?>">
 
 <div class="centered">
+	<?php
+	if (isset($RTSP_Stream_Config) && !empty($RTSP_Stream_Config)) {
+		?>
+        <div style="display:inline" id="RTSP_streams">
+            <label>RTSP Stream: </label>
+            <select id="rtsp_stream_select" class="testbtn" name="RTSP Streams">
+				<?php
+				//The setting representing which livestream to stream is more than the number of RTSP streams available
+				//maybe the list of streams has been modified
+                //This isn't the ideal for this, but needed a way to fix this setting without calling the advanced setting page
+				if (array_key_exists($config['RTSP_STREAM_TO_LIVESTREAM'], $RTSP_Stream_Config) === false) {
+					$contents = file_get_contents('/etc/birdnet/birdnet.conf');
+					$contents = preg_replace("/RTSP_STREAM_TO_LIVESTREAM=.*/", "RTSP_STREAM_TO_LIVESTREAM=\"0\"", $contents);
+					$fh = fopen("/etc/birdnet/birdnet.conf", "w");
+					fwrite($fh, $contents);
+					get_config($force_reload=true);
+					exec("sudo systemctl restart livestream.service");
+				}
+
+				//Print out the dropdown list for the RTSP streams
+				foreach ($RTSP_Stream_Config as $stream_id => $stream_host) {
+					$isSelected = "";
+					//Match up the selected value saved in config so we can preselect it
+					if ($config['RTSP_STREAM_TO_LIVESTREAM'] == $stream_id) {
+						$isSelected = 'selected="selected"';
+					}
+					//Create the select option
+					echo "<option value=" . $stream_id . " $isSelected >" . $stream_host . "</option>";
+				}
+
+				?>
+            </select>
+        </div>
+        &mdash;
+		<?php
+	}
+	?>
   <div style="display:inline" id="gain" >
   <label>Gain: </label>
   <span class="slidecontainer">
@@ -347,18 +452,77 @@ h1 {
     <span id="gain_value"></span>%
   </span>
   </div>
-  —
+    &mdash;
   <div style="display:inline" id="comp" >
-  <label>Compression: </label>
+    <label>Compression: </label>
     <input name="compression" type="checkbox" id="compression" disabled>
+  </div>
+  <div style="display:inline" id="fshift" >
+    <label>Freq shift: </label>
+    <?php 
+        if ($config['ACTIVATE_FREQSHIFT_IN_LIVESTREAM'] == "true") {
+          $freqshift_state = "checked";
+        } else {
+          $freqshift_state = "";
+        }
+    ?>
+    <input name="freqshift" type="checkbox" id="freqshift" <?php echo($freqshift_state); ?>  disabled>
+    <img id="livestream_freqshift_spinner" src=images/spinner.gif style="height: 25px; vertical-align: top; display: none">
   </div>
 </div>
 
-<audio style="display:none" controls="" crossorigin="anonymous" id='player' preload="none"><source id="playersrc" src="/stream"></audio>
-<h1>Loading...</h1>
+<audio style="display:none" controls="" crossorigin="anonymous" id='player' preload="none"><source id="playersrc" src="stream"></audio>
+<h1 id="loading-h1">Loading...</h1>
 <canvas></canvas>
 
 <script>
+var rtsp_stream_select = document.getElementById("rtsp_stream_select");
+if (typeof (rtsp_stream_select) !== 'undefined' && rtsp_stream_select !== null) {
+    //When the dropdown selection is changed set the new value is settings, then restart the livestream service so it broadcasts newly selected RTSP stream
+    rtsp_stream_select.onchange = function () {
+        if (this.value !== 'undefined') {
+            // Get the audio player element
+            var audio_player = document.querySelector('audio#player');
+            var central_controls_element = document.getElementsByClassName('centered')[0];
+
+            //Create the loading header again as a placeholder while we're waiting to reload the stream
+            var h1_loading = document.createElement("H1");
+            var h1_loading_text = document.createTextNode("Loading...");
+            h1_loading.setAttribute("id", "loading-h1");
+            h1_loading.setAttribute("style", "font-size:48px; font-weight: bolder; color: #FFF");
+            h1_loading.appendChild(h1_loading_text);
+
+            // Create the XMLHttpRequest object.
+            const xhr = new XMLHttpRequest();
+            // Initialize the request
+            xhr.open("GET", 'views.php?rtsp_stream_to_livestream=' + this.value + '&view=Advanced&submit=advanced');
+            // Send the request
+            xhr.send();
+            // Fired once the request completes successfully
+            xhr.onload = function (e) {
+                // Check if the request was a success
+                if (this.readyState === XMLHttpRequest.DONE && this.status === 200) {
+                    // Restart the audio player in case it stopped working while the livestream service was restarted
+                    if (audio_player !== 'undefined') {
+                        central_controls_element.appendChild(h1_loading);
+                        //Wait 5 seconds before restarting the stream
+                        setTimeout(function () {
+                                audio_player.pause();
+                                audio_player.setAttribute('src', 'stream');
+                                audio_player.load();
+                                audio_player.play();
+
+                                document.getElementById('loading-h1').remove()
+                            },
+                            10000
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
 var slider = document.getElementById("gain_input");
 var output = document.getElementById("gain_value");
 output.innerHTML = slider.value; // Display the default slider value
@@ -373,5 +537,10 @@ slider.oninput = function() {
 var compression = document.getElementById("compression");
 compression.onclick = function() {
   toggleCompression(this.checked);
+}
+
+var freqshift = document.getElementById("freqshift");
+freqshift.onclick = function() {
+  toggleFreqshift(this.checked);
 }
 </script>

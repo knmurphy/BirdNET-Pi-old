@@ -31,9 +31,14 @@ Add any other context about the problem or your installation here.
 The hardware on which BirdNET-Pi is running goes here.
 
 **Code or log snippets**
+The installation creates a log in `~/`, please include it where applicable.
+<details>
+<summary>log or code</summary>
+
 ```
 Paste your 
 log output 
 or 
 code here
 ```
+</details>

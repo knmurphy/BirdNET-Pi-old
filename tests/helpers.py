@@ -4,23 +4,11 @@ TESTDATA = os.path.join(os.path.dirname(__file__), 'testdata')
 
 
 class Settings(dict):
-    def getint(self, key, default=None):
-        value = self.get(key, default)
-        if value is None:
-            return default
-        try:
-            return int(value)
-        except (TypeError, ValueError):
-            return default
+    def getint(self, key):
+        return int(self.get(key))
 
-    def getfloat(self, key, default=None):
-        value = self.get(key, default)
-        if value is None:
-            return default
-        try:
-            return float(value)
-        except (TypeError, ValueError):
-            return default
+    def getfloat(self, key):
+        return float(self.get(key))
 
     @classmethod
     def with_defaults(cls):
@@ -42,7 +30,6 @@ class Settings(dict):
             "APPRISE_NOTIFY_NEW_SPECIES_EACH_DAY": "0",
             "APPRISE_MINIMUM_SECONDS_BETWEEN_NOTIFICATIONS_PER_SPECIES": "0",
             "APPRISE_ONLY_NOTIFY_SPECIES_NAMES": "",
-            "APPRISE_ONLY_NOTIFY_SPECIES_NAMES_2": "",
-            "BIRDNETPI_URL": "",
+            "APPRISE_ONLY_NOTIFY_SPECIES_NAMES_2": ""
         }
         return cls(settings)

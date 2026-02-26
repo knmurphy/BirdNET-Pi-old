@@ -1,13 +1,14 @@
 <?php
+
+/* Prevent XSS input */
+$_GET   = filter_input_array(INPUT_GET, FILTER_SANITIZE_STRING);
+$_POST  = filter_input_array(INPUT_POST, FILTER_SANITIZE_STRING);
+
 error_reporting(E_ALL);
 ini_set('display_errors',1);
 ini_set('display_startup_errors',1);
-
-if (file_exists('./scripts/thisrun.txt')) {
-  $config = parse_ini_file('./scripts/thisrun.txt');
-} elseif (file_exists('./scripts/firstrun.ini')) {
-  $config = parse_ini_file('./scripts/firstrun.ini');
-}
+require_once 'scripts/common.php';
+$config = get_config();
 
 if(isset($_GET['date'])){
 $theDate = $_GET['date'];
@@ -17,10 +18,11 @@ $theDate = date('Y-m-d');
 $chart = "Combo-$theDate.png";
 $chart2 = "Combo2-$theDate.png";
 
-$db = new SQLite3('./scripts/birds.db', SQLITE3_OPEN_CREATE | SQLITE3_OPEN_READWRITE);
+$db = new SQLite3('./scripts/birds.db', SQLITE3_OPEN_READONLY);
+$db->busyTimeout(1000);
 
-$statement1 = $db->prepare("SELECT COUNT(*) FROM detections
-	WHERE Date == \"$theDate\"");
+$statement1 = $db->prepare("SELECT COUNT(*) FROM detections WHERE Date == \"$theDate\"");
+ensure_db_ok($statement1);
 $result1 = $statement1->execute();
 $totalcount = $result1->fetchArray(SQLITE3_ASSOC);
 
@@ -31,14 +33,6 @@ if(isset($_GET['blocation']) ) {
 	header("Pragma: no-cache");
 	header("Expires: 0");
 
-
-	$user = trim(shell_exec("awk -F: '/1000/{print $1}' /etc/passwd"));
-	$home = trim(shell_exec("awk -F: '/1000/{print $6}' /etc/passwd"));
-
-
-	//$sunrise = date_sunrise(time(), SUNFUNCS_RET_TIMESTAMP, $config["LATITUDE"], $config["LONGITUDE"]);
-	//$sunset = date_sunset(time(), SUNFUNCS_RET_TIMESTAMP, $config["LATITUDE"], $config["LONGITUDE"]);
-
 	$list = array ();
 
 	//$hrsinday = intval(($sunset-$sunrise)/60/60);
@@ -47,10 +41,7 @@ if(isset($_GET['blocation']) ) {
 		$starttime = strtotime("12 AM") + (3600*$i);
 
 		$statement1 = $db->prepare("SELECT DISTINCT(Com_Name), COUNT(*) FROM detections WHERE Date == \"$theDate\" AND Time > '".date("H:i", $starttime)."' AND Time < '".date("H:i",$starttime + 3600)."' AND Confidence > 0.75 GROUP By Com_Name ORDER BY COUNT(*) DESC");
-		if($statement1 == False){
-		  echo "Database is busy";
-		  header("refresh: 0;");
-		}
+		ensure_db_ok($statement1);
 		$result1 = $statement1->execute();
 
 		$detections = [];
@@ -72,9 +63,9 @@ if(isset($_GET['blocation']) ) {
 
 	die();
 }
-
-?>
-
+if (get_included_files()[0] === __FILE__) {
+	echo '<!DOCTYPE html>
+<html lang="en">
 <head>
 
 <style>
@@ -86,7 +77,10 @@ if(isset($_GET['blocation']) ) {
 }
 </style>
 </head>
-<body>
+<body>';
+	}
+?>
+<script src="static/dialog-polyfill.js"></script>
 <div class="history centered">
 
 <dialog id="attribution-dialog">
@@ -136,28 +130,35 @@ function submitID() {
 
 </script>  
 
-<form action="" method="GET">
+<form action="views.php" method="GET">
   <input type="date" name="date" value="<?php echo $theDate;?>">
   <button type="submit" name="view" value="Daily Charts">Submit Date</button>
 </form>
-		<table>
-			<tr>
-				<th>Total Detections For The Day</th>
-				<td><?php echo $totalcount['COUNT(*)'];?></td>
-			</tr>
-		</table>
+<br>
+<table class="overview">
+  <tr>
+    <th>Total Detections For The Day</th>
+    <td><?php echo $totalcount['COUNT(*)']; ?></td>
+    <td style="padding:unset"><img src="images/spinner.gif" id="SwipeSpinner" hidden style="height:30px;"></td>
+  </tr>
+</table>
     	<?php // <br><button type="button" onclick="showDialog()">Export as CSV for eBird</button><br><br> ?>
 <?php
+$time = time();
+
 if (file_exists('./Charts/'.$chart)) {
-  echo "<img src=\"/Charts/$chart?nocache=time()\" >";
+  echo "<img src=\"/Charts/$chart?nocache=$time\" >";
 } else {
   echo "<p>No Charts for $theDate</p>";
 }
 echo "<hr>";
 if (file_exists('./Charts/'.$chart2)) {
-  echo "<img src=\"/Charts/$chart2?nocache=time()\">";
+  echo "<img src=\"/Charts/$chart2?nocache=$time\">";
 } else {
   echo "<p>No Charts For $theDate</p>";
-}?>
-</div>
-</html>
+}
+echo "</div>";
+if (get_included_files()[0] === __FILE__) {
+	echo '</html>
+</body>';
+}
