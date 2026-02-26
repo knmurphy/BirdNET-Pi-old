@@ -3,7 +3,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routers import detections, species, system, classifiers, settings_router, events
+from api.routers import detections, species, system, classifiers, settings_router, events, audio
 
 app = FastAPI(
     title="Field Station API",
@@ -26,6 +26,7 @@ app.include_router(system.router, prefix="/api", tags=["system"])
 app.include_router(classifiers.router, prefix="/api", tags=["classifiers"])
 app.include_router(settings_router.router, prefix="/api", tags=["settings"])
 app.include_router(events.router, prefix="/api", tags=["events"])
+app.include_router(audio.router, prefix="/api", tags=["audio"])
 
 
 @app.get("/")

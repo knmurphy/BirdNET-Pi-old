@@ -172,3 +172,78 @@ class TestDetectionNotify:
             "file_name": "clip_001.wav",
         })
         assert response.status_code == 200
+
+
+
+class TestAudioEndpoints:
+    """Tests for audio endpoints."""
+
+    def test_audio_devices_returns_list(self, client):
+        """GET /api/audio/devices returns 200 with devices list."""
+        response = client.get("/api/audio/devices")
+        assert response.status_code == 200
+        data = response.json()
+        assert "devices" in data
+        assert isinstance(data["devices"], list)
+
+    def test_audio_file_not_found(self, client):
+        """GET /api/audio/nonexistent.wav returns 404."""
+        response = client.get("/api/audio/nonexistent.wav")
+        assert response.status_code == 404
+
+    def test_audio_path_traversal_blocked(self, client):
+        """GET /api/audio/../../etc/passwd returns 400."""
+        response = client.get("/api/audio/../../etc/passwd")
+        assert response.status_code in (400, 404)
+
+
+class TestSettingsUpdate:
+    """Tests for POST /api/settings endpoint."""
+
+    def test_post_settings_returns_updated(self, client, tmp_path, monkeypatch):
+        """POST with valid data returns 200 with status='updated'."""
+        conf = tmp_path / "birdnet.conf"
+        conf.write_text("LATITUDE=0.0\nLONGITUDE=0.0\n")
+        monkeypatch.setattr("api.routers.settings_router.settings.config_ini_path", conf)
+        response = client.post("/api/settings", json={
+            "latitude": 42.5,
+            "longitude": -71.0,
+            "confidence_threshold": 0.7,
+        })
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "updated"
+        assert set(data["fields_changed"]) == {"latitude", "longitude", "confidence_threshold"}
+        # Verify values were written to the file
+        content = conf.read_text()
+        assert "LATITUDE=42.5" in content
+        assert "LONGITUDE=-71.0" in content
+        assert "SF_THRESH=0.7" in content
+
+    def test_post_settings_partial_update(self, client, tmp_path, monkeypatch):
+        """POST with only latitude returns 200, fields_changed=['latitude']."""
+        conf = tmp_path / "birdnet.conf"
+        conf.write_text("LATITUDE=0.0\nSENSITIVITY=1.0\n")
+        monkeypatch.setattr("api.routers.settings_router.settings.config_ini_path", conf)
+        response = client.post("/api/settings", json={"latitude": 35.0})
+        assert response.status_code == 200
+        data = response.json()
+        assert data["fields_changed"] == ["latitude"]
+        # Verify existing keys are preserved
+        content = conf.read_text()
+        assert "LATITUDE=35.0" in content
+        assert "SENSITIVITY=1.0" in content
+
+    def test_post_settings_empty_body(self, client, tmp_path, monkeypatch):
+        """POST with {} returns 200, fields_changed=[]."""
+        conf = tmp_path / "birdnet.conf"
+        conf.write_text("LATITUDE=10.0\n")
+        monkeypatch.setattr("api.routers.settings_router.settings.config_ini_path", conf)
+        response = client.post("/api/settings", json={})
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "updated"
+        assert data["fields_changed"] == []
+        # File should be unchanged
+        content = conf.read_text()
+        assert "LATITUDE=10.0" in content
