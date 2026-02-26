@@ -126,15 +126,13 @@ class TestNavigationShell:
         """Shell should have a header with station title."""
         from homepage.web_app import _shell
         shell = str(_shell("test content", "/app/dashboard"))
-        # Shell should have header with proper title structure
-        assert "<title>Field Station</title>" in shell or "<h1" in shell
+        assert "<title>Field Station</title>" in shell
 
     def test_shell_has_bottom_tabs(self):
         """Shell should have bottom navigation with tabs."""
         from homepage.web_app import _shell
         shell = str(_shell("test content", "/app/dashboard"))
-        # Should have navigation tabs with proper href structure
-        assert '<a href="/app/dashboard"' in shell or "Dashboard</a>" in shell
+        assert '<a href="/app/dashboard"' in shell
 
 
 class TestDetectionsRoute:
@@ -227,6 +225,9 @@ class TestStatsRoute:
         content = str(_stats_content())
         # Should contain "Statistics" header with proper H2 structure
         assert "<h2>Statistics</h2>" in content
+        assert "Total Detections" in content
+        assert "Total Species" in content
+        assert 'class="widget"' in content or "class='widget'" in content
 
 
 class TestSettingsRoute:
