@@ -4,13 +4,12 @@ Field Station OS - FastHTML Web Application
 A Python-native web UI for passive acoustic monitoring.
 Built with FastHTML for HTMX-based navigation (no iframe, no full page reload).
 
-Following TDD: This code is written to pass tests, then refactored.
+This version uses the FastAPI backend for data instead of direct database queries.
 """
 import os
-import sqlite3
 import logging
-import shutil
-from datetime import date, datetime
+import httpx
+from datetime import datetime
 
 from fasthtml.common import (
     FastHTML, serve,
@@ -19,8 +18,23 @@ from fasthtml.common import (
     Div, H2, H3, P, A, Audio,
 )
 
-# Database configuration
-DB_PATH = os.path.join(os.path.expanduser("~"), "BirdNET-Pi", "scripts", "birds.db")
+# API configuration - connect to FastAPI backend
+API_BASE_URL = os.environ.get("FIELD_STATION_API_URL", "http://127.0.0.1:8003")
+
+
+def api_get(endpoint: str) -> dict | None:
+    """Make a GET request to the FastAPI backend."""
+    try:
+        with httpx.Client(timeout=5.0) as client:
+            response = client.get(f"{API_BASE_URL}{endpoint}")
+            response.raise_for_status()
+            return response.json()
+    except httpx.HTTPError as e:
+        logging.error(f"API request failed for {endpoint}: {e}")
+        return None
+    except Exception as e:
+        logging.error(f"Unexpected error calling API {endpoint}: {e}")
+        return None
 
 
 # Design System - Dark Theme
@@ -247,6 +261,17 @@ a:hover { text-decoration: underline; }
   margin-top: var(--space-1);
 }
 
+/* Error state */
+.error-message {
+  color: var(--red);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: var(--space-3);
+  background: var(--bg3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--red);
+}
+
 /* Responsive */
 @media (max-width: 640px) {
   .bottom-nav { display: flex; }
@@ -255,58 +280,6 @@ a:hover { text-decoration: underline; }
   .widget-value { font-size: 22px; }
 }
 """
-
-
-def get_today_detection_count() -> int:
-    """Query today's detection count from the database."""
-    today = date.today().isoformat()
-    try:
-        con = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
-        cursor = con.execute(
-            "SELECT COUNT(*) FROM detections WHERE Date = ?",
-            (today,)
-        )
-        count = cursor.fetchone()[0]
-        con.close()
-        return count
-    except Exception as e:
-        logging.error(f"Error getting today's detection count: {e}")
-        return 0
-
-
-def get_today_species_count() -> int:
-    """Query count of distinct species detected today."""
-    today = date.today().isoformat()
-    try:
-        con = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
-        cursor = con.execute(
-            "SELECT COUNT(DISTINCT Com_Name) FROM detections WHERE Date = ?",
-            (today,)
-        )
-        count = cursor.fetchone()[0]
-        con.close()
-        return count
-    except Exception as e:
-        logging.error(f"Error getting today's species count: {e}")
-        return 0
-
-
-def get_latest_detection():
-    """Get the most recent detection."""
-    try:
-        con = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
-        con.row_factory = sqlite3.Row
-        cursor = con.execute(
-            "SELECT Com_Name, Time, Confidence FROM detections ORDER BY Date DESC, Time DESC LIMIT 1"
-        )
-        row = cursor.fetchone()
-        con.close()
-        if row:
-            return dict(row)
-        return None
-    except Exception as e:
-        logging.error(f"Error getting latest detection: {e}")
-        return None
 
 
 # Create the FastHTML application
@@ -320,11 +293,20 @@ def dashboard():
 
 
 def _dashboard_content():
-    """Generate the dashboard content."""
-    today_count = get_today_detection_count()
-    species_count = get_today_species_count()
-    latest = get_latest_detection()
-
+    """Generate the dashboard content using the API."""
+    # Fetch today's summary from API
+    summary = api_get("/api/detections/today/summary")
+    
+    if summary is None:
+        return Div(
+            H2("Dashboard"),
+            P("Unable to connect to API. Is the backend running?", cls="error-message"),
+        )
+    
+    today_count = summary.get("total_detections", 0)
+    species_count = summary.get("species_count", 0)
+    top_species = summary.get("top_species", [])
+    
     widgets = [
         H2("Dashboard"),
         Div(
@@ -338,24 +320,18 @@ def _dashboard_content():
             cls="widget"
         ),
     ]
-
-    if latest:
+    
+    # Show top species if available
+    if top_species:
+        top_names = ", ".join([s["com_name"] for s in top_species[:3]])
         widgets.append(
             Div(
-                Div("Latest Detection", cls="widget-label"),
-                Div(f"{latest['Com_Name']} ({latest['Time']})", cls="widget-value"),
+                Div("Top Species", cls="widget-label"),
+                Div(top_names, cls="widget-value", style="font-size: 14px;"),
                 cls="widget"
             )
         )
-    else:
-        widgets.append(
-            Div(
-                Div("Latest Detection", cls="widget-label"),
-                Div("No detections yet", cls="widget-value"),
-                cls="widget"
-            )
-        )
-
+    
     return Div(*widgets, cls="widget-grid")
 
 
@@ -377,7 +353,7 @@ def _shell(content, current_path: str = "/app/dashboard"):
     ]
 
     return Html(
-Head(
+        Head(
             Meta(charset="utf-8"),
             Meta(name="viewport", content="width=device-width, initial-scale=1"),
             Link(rel="preconnect", href="https://fonts.googleapis.com"),
@@ -403,10 +379,6 @@ Head(
     )
 
 
-if __name__ == "__main__":
-    serve(port=8502)
-
-
 @app.get("/app/detections")
 def detections():
     """Render the detections page."""
@@ -422,34 +394,32 @@ def _confidence_class(confidence: float) -> str:
     else:
         return "conf-low"
 
+
 def _detections_content():
-    """Generate the detections list content."""
-    today = date.today().isoformat()
-    try:
-        con = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
-        con.row_factory = sqlite3.Row
-        cursor = con.execute(
-            "SELECT Com_Name, Sci_Name, Time, Confidence, File_Name FROM detections WHERE Date = ? ORDER BY Time DESC LIMIT 50",
-            (today,)
+    """Generate the detections list content using the API."""
+    # Fetch species data from API
+    data = api_get("/api/species/today")
+    
+    if data is None:
+        return Div(
+            H2("Today's Detections"),
+            P("Unable to connect to API.", cls="error-message"),
         )
-        rows = cursor.fetchall()
-        con.close()
-
-        if not rows:
-            return Div(H2("Today's Detections"), P("No detections yet today."))
-
-        items = [
-            Div(
-                f"{row['Time']} - {row['Com_Name']} ({float(row['Confidence'])*100:.0f}%%)",
-                Audio(controls=True, preload="none", src=row['File_Name']),
-                cls=_confidence_class(float(row['Confidence']))
-            )
-            for row in rows
-        ]
-        return Div(H2("Today's Detections"), *items)
-    except Exception as e:
-        logging.error(f"Error loading detections: {e}")
-        return Div(H2("Today's Detections"), P("Unable to load detections."))
+    
+    species_list = data.get("species", [])
+    
+    if not species_list:
+        return Div(H2("Today's Detections"), P("No detections yet today."))
+    
+    # Show species with counts (API doesn't return individual detections yet)
+    items = [
+        Div(
+            f"{s['com_name']} - {s['detection_count']} detections (max: {s['max_confidence']*100:.0f}%)",
+            cls=_confidence_class(s['max_confidence'])
+        )
+        for s in species_list[:50]  # Limit to 50
+    ]
+    return Div(H2("Today's Detections (by species)"), *items)
 
 
 @app.get("/app/species")
@@ -459,125 +429,28 @@ def species():
 
 
 def _species_content():
-    """Generate the species list content."""
-    today = date.today().isoformat()
-    try:
-        con = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
-        con.row_factory = sqlite3.Row
-        cursor = con.execute(
-            """SELECT Com_Name, Sci_Name, COUNT(*) as count,
-                 MAX(Confidence) as max_conf, MAX(Time) as last_seen
-                 FROM detections WHERE Date = ?
-                 GROUP BY Com_Name ORDER BY count DESC""",
-            (today,)
+    """Generate the species list content using the API."""
+    data = api_get("/api/species/today")
+    
+    if data is None:
+        return Div(
+            H2("Today's Species"),
+            P("Unable to connect to API.", cls="error-message"),
         )
-        rows = cursor.fetchall()
-        con.close()
-
-        if not rows:
-            return Div(H2("Today's Species"), P("No species detected today."))
-
-        items = [
-            Div(
-                f"{r['Com_Name']} - {r['count']} detections (max: {float(r['max_conf'])*100:.0f}%%)",
-                cls=_confidence_class(float(r['max_conf']))
-            )
-            for r in rows
-        ]
-        return Div(H2("Today's Species"), *items)
-    except Exception as e:
-        logging.error(f"Error loading species: {e}")
-        return Div(H2("Today's Species"), P("Error loading species."))
-
-
-def get_total_detection_count() -> int:
-    """Get total detections (all time)."""
-    try:
-        con = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
-        cursor = con.execute("SELECT COUNT(*) FROM detections")
-        count = cursor.fetchone()[0]
-        con.close()
-        return count
-    except Exception as e:
-        logging.error(f"Error getting total detection count: {e}")
-        return 0
-
-
-def get_total_species_count() -> int:
-    """Get total distinct species (all time)."""
-    try:
-        con = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
-        cursor = con.execute("SELECT COUNT(DISTINCT Com_Name) FROM detections")
-        count = cursor.fetchone()[0]
-        con.close()
-        return count
-    except Exception as e:
-        logging.error(f"Error getting total species count: {e}")
-        return 0
-
-
-def get_hourly_detections() -> dict:
-    """Get detections per hour for today. Returns {hour: count}."""
-    today = date.today().isoformat()
-    try:
-        con = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
-        cursor = con.execute(
-            "SELECT strftime('%H', Time) as hour, COUNT(*) as count "
-            "FROM detections WHERE Date = ? GROUP BY hour ORDER BY hour",
-            (today,)
+    
+    species_list = data.get("species", [])
+    
+    if not species_list:
+        return Div(H2("Today's Species"), P("No species detected today."))
+    
+    items = [
+        Div(
+            f"{s['com_name']} ({s['sci_name']}) - {s['detection_count']} detections (max: {s['max_confidence']*100:.0f}%)",
+            cls=_confidence_class(s['max_confidence'])
         )
-        rows = cursor.fetchall()
-        con.close()
-        # Return dict with hour (int) as key, count as value
-        return {int(row[0]): row[1] for row in rows}
-    except Exception as e:
-        logging.error(f"Error getting hourly detections: {e}")
-        return {}
-
-
-def get_system_health() -> dict:
-    """Get system health metrics: disk usage, database size, etc."""
-    health = {}
-    try:
-        # Get disk usage for the home directory (where data is stored)
-        disk = shutil.disk_usage(os.path.expanduser('~'))
-        health['disk_used_gb'] = disk.used / (1024**3)
-        health['disk_total_gb'] = disk.total / (1024**3)
-        health['disk_percent'] = (disk.used / disk.total) * 100
-    except Exception as e:
-        logging.error(f"Error getting disk usage: {e}")
-        health['disk_used_gb'] = 0
-        health['disk_total_gb'] = 0
-        health['disk_percent'] = 0
-
-    try:
-        # Get database file size
-        db_size = os.path.getsize(DB_PATH)
-        health['db_size_mb'] = db_size / (1024**2)
-    except Exception as e:
-        logging.error(f"Error getting database size: {e}")
-        health['db_size_mb'] = 0
-
-    try:
-        # Get recordings directory size
-        recordings_path = os.path.expanduser('~/BirdSongs/Extracted')
-        if os.path.exists(recordings_path):
-            total_size = 0
-            for dirpath, dirnames, filenames in os.walk(recordings_path):
-                for f in filenames:
-                    fp = os.path.join(dirpath, f)
-                    total_size += os.path.getsize(fp)
-            health['recordings_gb'] = total_size / (1024**3)
-        else:
-            health['recordings_gb'] = 0
-    except Exception as e:
-        logging.error(f"Error getting recordings size: {e}")
-        health['recordings_gb'] = 0
-
-    return health
-
-
-
+        for s in species_list
+    ]
+    return Div(H2("Today's Species"), *items)
 
 
 @app.get("/app/stats")
@@ -587,21 +460,30 @@ def stats():
 
 
 def _hourly_activity_section() -> Div:
-    """Generate hourly activity bar chart for today."""
-    hourly_data = get_hourly_detections()
+    """Generate hourly activity bar chart for today using API data."""
+    summary = api_get("/api/detections/today/summary")
     
-    if not hourly_data:
+    if summary is None:
+        return Div(
+            H3("Today's Activity"),
+            P("Unable to load activity data.", cls="text2"),
+            cls="hourly-chart"
+        )
+    
+    hourly_counts = summary.get("hourly_counts", [0] * 24)
+    
+    if not any(hourly_counts):
         return Div(
             H3("Today's Activity"),
             P("No detections yet today.", cls="text2"),
             cls="hourly-chart"
         )
     
-    max_count = max(hourly_data.values()) if hourly_data else 1
+    max_count = max(hourly_counts) if hourly_counts else 1
     
     bar_rows = []
     for hour in range(24):
-        count = hourly_data.get(hour, 0)
+        count = hourly_counts[hour] if hour < len(hourly_counts) else 0
         bar_width = (count / max_count * 100) if max_count > 0 else 0
         bar_rows.append(
             Div(
@@ -622,26 +504,42 @@ def _hourly_activity_section() -> Div:
 
 
 def _system_health_section() -> Div:
-    """Generate system health widgets."""
-    health = get_system_health()
+    """Generate system health widgets using API data."""
+    system = api_get("/api/system")
+    
+    if system is None:
+        return Div(
+            H3("System Health"),
+            P("Unable to load system data.", cls="error-message"),
+        )
     
     return Div(
         H3("System Health"),
         Div(
             Div(
+                Div("CPU", cls="health-label"),
+                Div(f"{system['cpu_percent']:.1f}%", cls="health-value"),
+                cls="health-item"
+            ),
+            Div(
+                Div("Temperature", cls="health-label"),
+                Div(f"{system['temperature_celsius']:.1f}°C", cls="health-value"),
+                cls="health-item"
+            ),
+            Div(
                 Div("Disk Usage", cls="health-label"),
-                Div(f"{health['disk_used_gb']:.1f} / {health['disk_total_gb']:.0f} GB", cls="health-value"),
-                Div(f"{health['disk_percent']:.1f}% used", cls="health-detail"),
+                Div(f"{system['disk_used_gb']:.1f} / {system['disk_total_gb']:.0f} GB", cls="health-value"),
+                Div(f"{(system['disk_used_gb']/system['disk_total_gb']*100):.1f}% used", cls="health-detail"),
                 cls="health-item"
             ),
             Div(
-                Div("Database", cls="health-label"),
-                Div(f"{health['db_size_mb']:.1f} MB", cls="health-value"),
+                Div("Uptime", cls="health-label"),
+                Div(f"{system['uptime_seconds']/3600:.1f}h", cls="health-value"),
                 cls="health-item"
             ),
             Div(
-                Div("Recordings", cls="health-label"),
-                Div(f"{health['recordings_gb']:.1f} GB", cls="health-value"),
+                Div("SSE Subscribers", cls="health-label"),
+                Div(str(system['sse_subscribers']), cls="health-value"),
                 cls="health-item"
             ),
             cls="health-grid"
@@ -650,25 +548,34 @@ def _system_health_section() -> Div:
 
 
 def _stats_content():
-    """Generate the stats content."""
-    total_detections = get_total_detection_count()
-    total_species = get_total_species_count()
+    """Generate the stats content using the API."""
+    summary = api_get("/api/detections/today/summary")
+    
+    if summary is None:
+        return Div(
+            H2("Statistics"),
+            P("Unable to connect to API.", cls="error-message"),
+        )
+    
+    today_detections = summary.get("total_detections", 0)
+    today_species = summary.get("species_count", 0)
 
     return Div(
         H2("Statistics"),
         Div(
-            Div("Total Detections", cls="widget-label"),
-            Div(f"{total_detections:,}", cls="widget-value"),
+            Div("Today's Detections", cls="widget-label"),
+            Div(f"{today_detections:,}", cls="widget-value"),
             cls="widget"
         ),
         Div(
-            Div("Total Species", cls="widget-label"),
-            Div(f"{total_species:,}", cls="widget-value"),
+            Div("Today's Species", cls="widget-label"),
+            Div(f"{today_species:,}", cls="widget-value"),
             cls="widget"
         ),
         _hourly_activity_section(),
         _system_health_section(),
     )
+
 
 @app.get("/app/settings")
 def settings():
@@ -677,8 +584,47 @@ def settings():
 
 
 def _settings_content():
-    """Generate the settings content."""
-    return Div(
+    """Generate the settings content using the API."""
+    settings_data = api_get("/api/settings")
+    classifiers = api_get("/api/classifiers")
+    
+    if settings_data is None:
+        return Div(
+            H2("Settings"),
+            P("Unable to connect to API.", cls="error-message"),
+        )
+    
+    items = [
         H2("Settings"),
-        P("System configuration coming soon..."),
-    )
+        Div(
+            Div("Audio Path", cls="health-label"),
+            Div(settings_data.get("audio_path", "N/A"), cls="health-value"),
+            cls="health-item"
+        ),
+        Div(
+            Div("Location", cls="health-label"),
+            Div(f"{settings_data.get('latitude', 0):.4f}, {settings_data.get('longitude', 0):.4f}", cls="health-value"),
+            cls="health-item"
+        ),
+        Div(
+            Div("Confidence Threshold", cls="health-label"),
+            Div(f"{settings_data.get('confidence_threshold', 0.8)*100:.0f}%", cls="health-value"),
+            cls="health-item"
+        ),
+    ]
+    
+    if classifiers:
+        classifier_names = [c["name"] for c in classifiers if c.get("enabled", False)]
+        items.append(
+            Div(
+                Div("Active Classifiers", cls="health-label"),
+                Div(", ".join(classifier_names) or "None", cls="health-value"),
+                cls="health-item"
+            )
+        )
+    
+    return Div(*items, cls="health-grid")
+
+
+if __name__ == "__main__":
+    serve(port=8502)
