@@ -30,22 +30,22 @@ async def event_stream():
         queue = event_bus.subscribe()
 
         try:
+            # Wait for events
             while True:
                 try:
-                    event = await asyncio.wait_for(
-                        queue.get(), timeout=HEARTBEAT_INTERVAL_SECONDS
-                    )
+                    # Check for event with timeout (slightly longer than heartbeat interval)
+                    event = await asyncio.wait_for(queue.get(), timeout=20.0)
                     if event is None:
                         break
                     yield f"event: detection\ndata: {event.to_sse_data()}\n\n"
                 except asyncio.TimeoutError:
-                    # Send heartbeat comment to keep connection alive
+                    # Send heartbeat on timeout (every ~15-20 seconds)
                     yield ": heartbeat\n\n"
         except asyncio.CancelledError:
             pass
         finally:
             event_bus.unsubscribe(queue)
-
+    
     return StreamingResponse(
         generate(),
         media_type="text/event-stream",

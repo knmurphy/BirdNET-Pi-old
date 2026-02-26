@@ -7,7 +7,6 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from api.services.database import get_connection, get_duckdb_connection
-from api.services.eventbus import event_bus, DetectionEvent
 from api.models.detection import Detection, TodaySummaryResponse, TopSpecies
 
 router = APIRouter()
@@ -23,23 +22,6 @@ class DetectionsResponse(BaseModel):
     has_more: bool
 
 
-class DetectionNotification(BaseModel):
-    """Payload for notifying the system of a new detection."""
-
-    com_name: str
-    sci_name: str
-    confidence: float
-    file_name: str = ""
-    classifier: str = "birdnet"
-
-
-class NotifyResponse(BaseModel):
-    """Response for /api/detections/notify."""
-
-    status: str
-    subscribers_notified: int
-
-
 @router.get("/detections", response_model=DetectionsResponse)
 async def get_detections(
     date: Optional[str] = Query(None, description="Filter by date (YYYY-MM-DD)"),
@@ -51,77 +33,83 @@ async def get_detections(
 ):
     """Get paginated detection log with optional filtering.
 
-    Query DuckDB for detection records with support for filtering by date,
+    Query SQLite for detection records with support for filtering by date,
     classifier, minimum confidence, and species name.
+    
+    Note: Currently uses SQLite until DuckDB migration is complete.
+    Classifier filtering is not available in SQLite schema.
     """
     try:
-        conn = get_duckdb_connection()
-
-        # Build query with filters
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        # Build query with filters using SQLite column names (Capital_Snake_Case)
         conditions = []
         params = []
-
+        
         if date:
-            conditions.append("date = ?")
+            conditions.append("Date = ?")
             params.append(date)
-
-        if classifier:
-            conditions.append("classifier = ?")
-            params.append(classifier)
-
+        
+        # Note: classifier column doesn't exist in SQLite schema yet
+        # This filter will be ignored for now until DuckDB migration
+        
         if min_confidence is not None:
-            conditions.append("confidence >= ?")
+            conditions.append("Confidence >= ?")
             params.append(min_confidence)
-
+        
         if species:
-            conditions.append("com_name ILIKE ?")
+            conditions.append("Com_Name LIKE ?")
             params.append(f"%{species}%")
-
+        
         where_clause = " AND ".join(conditions) if conditions else "1=1"
-
+        
         # Get total count
         count_query = f"SELECT COUNT(*) FROM detections WHERE {where_clause}"
-        total = conn.execute(count_query, params).fetchone()[0]
-
+        cursor.execute(count_query, params)
+        total = cursor.fetchone()[0]
+        
         # Calculate pagination
         offset = (page - 1) * limit
-
-        # Get paginated results
+        
+        # Get paginated results using SQLite column names
+        # SQLite schema: Date, Time, Sci_Name, Com_Name, Confidence, Lat, Lon, Cutoff, Week, Sens, Overlap, File_Name
         data_query = f"""
-            SELECT id, date, time, iso8601, com_name, sci_name, confidence,
-                   file_name, classifier, lat, lon, cutoff, week, sens, overlap
+            SELECT ROWID, Date, Time, Sci_Name, Com_Name, Confidence, 
+                   Lat, Lon, Cutoff, Week, Sens, Overlap, File_Name
             FROM detections
             WHERE {where_clause}
-            ORDER BY date DESC, time DESC
+            ORDER BY Date DESC, Time DESC
             LIMIT ? OFFSET ?
         """
         params_with_pagination = params + [limit, offset]
-        rows = conn.execute(data_query, params_with_pagination).fetchall()
-
+        cursor.execute(data_query, params_with_pagination)
+        rows = cursor.fetchall()
+        
         conn.close()
-
+        
         # Convert to Detection models
         detections = [
             Detection(
-                id=row[0],
+                id=row[0],  # ROWID
                 date=row[1],
                 time=row[2],
-                iso8601=row[3],
+                iso8601=None,  # Not in SQLite schema
+                sci_name=row[3],
                 com_name=row[4],
-                sci_name=row[5],
-                confidence=row[6],
-                file_name=row[7],
-                classifier=row[8] or "birdnet",
-                lat=row[9],
-                lon=row[10],
-                cutoff=row[11],
-                week=row[12],
-                sens=row[13],
-                overlap=row[14],
+                confidence=row[5],
+                lat=row[6],
+                lon=row[7],
+                cutoff=row[8],
+                week=row[9],
+                sens=row[10],
+                overlap=row[11],
+                file_name=row[12],
+                classifier="birdnet",  # Default until classifier column exists
             )
             for row in rows
         ]
-
+        
         return DetectionsResponse(
             detections=detections,
             total=total,
@@ -129,32 +117,9 @@ async def get_detections(
             limit=limit,
             has_more=(offset + limit) < total,
         )
-
+        
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
-
-
-@router.post("/detections/notify", response_model=NotifyResponse)
-async def notify_detection(notification: DetectionNotification):
-    """Publish a new detection event to all SSE subscribers.
-
-    Called by analysis scripts when a new bird is detected.
-    Broadcasts the detection to all connected SSE clients in real time.
-    """
-    now = datetime.now()
-    event = DetectionEvent(
-        id=0,
-        com_name=notification.com_name,
-        sci_name=notification.sci_name,
-        confidence=notification.confidence,
-        date=now.strftime("%Y-%m-%d"),
-        time=now.strftime("%H:%M:%S"),
-        iso8601=now.isoformat(),
-        file_name=notification.file_name,
-        classifier=notification.classifier,
-    )
-    count = await event_bus.publish(event)
-    return NotifyResponse(status="published", subscribers_notified=count)
 
 
 @router.get("/detections/today/summary", response_model=TodaySummaryResponse)
