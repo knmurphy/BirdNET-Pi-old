@@ -10,7 +10,7 @@ from api.services.eventbus import event_bus
 
 router = APIRouter()
 
-HEARTBEAT_INTERVAL_SECONDS = 30.0
+HEARTBEAT_INTERVAL_SECONDS = 15.0
 
 
 @router.get("/events")
@@ -18,7 +18,7 @@ async def event_stream():
     """Server-Sent Events stream for real-time detection events.
 
     Clients can connect to receive detection events as they happen.
-    Heartbeat comments are sent every 30 seconds to keep connections alive.
+    Heartbeat comments are sent every 15 seconds to keep connections alive.
     """
 
     async def generate():
