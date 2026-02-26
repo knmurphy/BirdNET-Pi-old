@@ -10,6 +10,7 @@ import os
 import shutil
 import sqlite3
 import logging
+import time
 from datetime import date, datetime
 
 from fasthtml.common import (
@@ -517,21 +518,31 @@ def get_hourly_detections() -> dict:
     today = date.today().isoformat()
     try:
         con = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
-        cursor = con.execute(
-            "SELECT CAST(SUBSTR(Time, 1, 2) AS INTEGER) as hour, COUNT(*) "
-            "FROM detections WHERE Date = ? GROUP BY hour",
-            (today,)
-        )
-        rows = cursor.fetchall()
-        con.close()
+        try:
+            cursor = con.execute(
+                "SELECT CAST(SUBSTR(Time, 1, 2) AS INTEGER) as hour, COUNT(*) "
+                "FROM detections WHERE Date = ? GROUP BY hour",
+                (today,)
+            )
+            rows = cursor.fetchall()
+        finally:
+            con.close()
         return {int(row[0]): row[1] for row in rows}
     except Exception as e:
         logging.error(f"Error getting hourly detections: {e}")
         return {}
 
 
+_HEALTH_CACHE: dict = {}
+_HEALTH_CACHE_TTL = 60  # seconds
+
+
 def get_system_health() -> dict:
-    """Get system health metrics from filesystem."""
+    """Get system health metrics from filesystem, cached for 60 seconds."""
+    now = time.monotonic()
+    if _HEALTH_CACHE.get('expires', 0) > now:
+        return _HEALTH_CACHE['data']
+
     try:
         db_size_mb = os.path.getsize(DB_PATH) / (1024 * 1024) if os.path.exists(DB_PATH) else 0.0
     except Exception:
@@ -556,13 +567,16 @@ def get_system_health() -> dict:
     except Exception:
         disk_total_gb = disk_used_gb = disk_percent = 0.0
 
-    return {
+    result = {
         'disk_used_gb': disk_used_gb,
         'disk_total_gb': disk_total_gb,
         'disk_percent': disk_percent,
         'db_size_mb': db_size_mb,
         'recordings_gb': recordings_gb,
     }
+    _HEALTH_CACHE['data'] = result
+    _HEALTH_CACHE['expires'] = now + _HEALTH_CACHE_TTL
+    return result
 
 
 def _hourly_activity_section() -> Div:
@@ -595,7 +609,8 @@ def _hourly_activity_section() -> Div:
 
     return Div(
         H3("Today's Activity"),
-        Div(*bar_rows, cls="hourly-chart"),
+        Div(*bar_rows),
+        cls="hourly-chart",
     )
 
 

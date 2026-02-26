@@ -306,10 +306,16 @@ class TestHourlyActivity:
         result = get_hourly_detections()
         assert isinstance(result, dict)
 
-    def test_get_hourly_detections_keys_are_ints(self):
-        """Hour keys should be integers 0-23."""
+    @patch('homepage.web_app.sqlite3.connect')
+    def test_get_hourly_detections_uses_int_keys_from_db_rows(self, mock_connect):
+        """Should coerce DB hour values to int keys within 0-23."""
+        mock_conn = mock_connect.return_value
+        mock_conn.__enter__.return_value = mock_conn
+        mock_cursor = mock_conn.execute.return_value
+        mock_cursor.fetchall.return_value = [("0", 5), ("12", 8), ("23", 2)]
         from homepage.web_app import get_hourly_detections
         result = get_hourly_detections()
+        assert result == {0: 5, 12: 8, 23: 2}
         for key in result.keys():
             assert isinstance(key, int)
             assert 0 <= key <= 23
