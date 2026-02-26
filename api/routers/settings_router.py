@@ -2,10 +2,9 @@
 
 import configparser
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from pydantic import BaseModel
 
 from api.config import settings
@@ -18,19 +17,19 @@ class SettingsResponse(BaseModel):
 
     # Audio settings
     audio_path: str
-    
+
     # Location
     latitude: float
     longitude: float
-    
+
     # Model settings
     confidence_threshold: float
     overlap: float
     sensitivity: float
-    
+
     # Processing
     week: int  # -1 for auto
-    
+
     # Server info
     generated_at: str
 
@@ -39,7 +38,7 @@ def parse_config_ini() -> dict[str, Any]:
     """Parse birdnet.conf and return settings dict."""
     config = configparser.ConfigParser()
     config_path = settings.config_ini_path
-    
+
     if not config_path.exists():
         # Return defaults if config doesn't exist
         return {
@@ -50,13 +49,13 @@ def parse_config_ini() -> dict[str, Any]:
             "sensitivity": 1.0,
             "week": -1,
         }
-    
+
     try:
         config.read(config_path)
-        
+
         # Extract values from [BIRDNET] section
         birdnet = config.get("BIRDNET", {})
-        
+
         return {
             "latitude": float(birdnet.get("LATITUDE", 0.0)),
             "longitude": float(birdnet.get("LONGITUDE", 0.0)),
@@ -81,7 +80,7 @@ def parse_config_ini() -> dict[str, Any]:
 async def get_settings():
     """Get current BirdNET-Pi settings from config file."""
     config_values = parse_config_ini()
-    
+
     return SettingsResponse(
         audio_path=str(settings.audio_base_path),
         latitude=config_values["latitude"],

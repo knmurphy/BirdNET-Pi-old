@@ -3,7 +3,6 @@
 import asyncio
 from dataclasses import dataclass
 from typing import AsyncGenerator
-from datetime import datetime
 
 
 @dataclass

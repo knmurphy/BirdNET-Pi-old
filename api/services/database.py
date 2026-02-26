@@ -2,8 +2,6 @@
 
 import duckdb
 import sqlite3
-from pathlib import Path
-from typing import Optional
 from contextlib import contextmanager
 
 from api.config import settings
@@ -14,19 +12,19 @@ def get_duckdb_connection(read_only: bool = True) -> duckdb.DuckDBPyConnection:
 
     Args:
         read_only: If True, opens in read-only mode (default).
-    
+
     Returns:
         DuckDB connection object.
-    
+
     Note:
         Caller is responsible for closing the connection.
     """
     db_path = settings.duckdb_path
-    
+
     # Fall back to SQLite path if DuckDB doesn't exist yet
     if not db_path.exists():
         db_path = settings.database_path
-    
+
     return duckdb.connect(str(db_path), read_only=read_only)
 
 
@@ -35,7 +33,7 @@ def get_connection() -> sqlite3.Connection:
 
     Returns:
         SQLite connection object.
-    
+
     Note:
         Caller is responsible for closing the connection.
         Prefer get_duckdb_connection() for new code.
@@ -46,7 +44,7 @@ def get_connection() -> sqlite3.Connection:
 @contextmanager
 def duckdb_cursor(read_only: bool = True):
     """Context manager for DuckDB cursor.
-    
+
     Usage:
         with duckdb_cursor() as cur:
             result = cur.execute("SELECT * FROM detections").fetchall()
@@ -60,7 +58,7 @@ def duckdb_cursor(read_only: bool = True):
 
 def init_duckdb_schema(conn: duckdb.DuckDBPyConnection) -> None:
     """Initialize DuckDB schema if it doesn't exist.
-    
+
     This creates the detections table with indexes for optimal query performance.
     """
     conn.execute("""
@@ -82,7 +80,7 @@ def init_duckdb_schema(conn: duckdb.DuckDBPyConnection) -> None:
             overlap REAL
         )
     """)
-    
+
     # Create indexes for common queries
     conn.execute("CREATE INDEX IF NOT EXISTS idx_date ON detections(date)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_com_name ON detections(com_name)")
