@@ -10,6 +10,8 @@ from api.services.eventbus import event_bus
 
 router = APIRouter()
 
+HEARTBEAT_INTERVAL_SECONDS = 30.0
+
 
 @router.get("/events")
 async def event_stream():
@@ -30,7 +32,9 @@ async def event_stream():
         try:
             while True:
                 try:
-                    event = await asyncio.wait_for(queue.get(), timeout=30.0)
+                    event = await asyncio.wait_for(
+                        queue.get(), timeout=HEARTBEAT_INTERVAL_SECONDS
+                    )
                     if event is None:
                         break
                     yield f"event: detection\ndata: {event.to_sse_data()}\n\n"

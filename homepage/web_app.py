@@ -412,6 +412,18 @@ LIVE_JS = """
 """
 
 
+# HTMX polling configuration (shared between initial render and partials)
+DASHBOARD_STATS_POLL = {
+    "hx-get": "/app/partials/dashboard-stats",
+    "hx-trigger": "every 30s",
+    "hx-swap": "outerHTML",
+}
+SYSTEM_HEALTH_POLL = {
+    "hx-get": "/app/partials/system-health",
+    "hx-trigger": "every 60s",
+    "hx-swap": "outerHTML",
+}
+
 # Create the FastHTML application
 app = FastHTML()
 
@@ -463,8 +475,7 @@ def _dashboard_content():
             ),
             cls="widget-grid",
             id="dashboard-stats",
-            **{"hx-get": "/app/partials/dashboard-stats", "hx-trigger": "every 30s",
-               "hx-swap": "outerHTML"},
+            **DASHBOARD_STATS_POLL,
         ),
         # Live detection feed
         H3("Live Feed"),
@@ -513,7 +524,9 @@ def _shell(content, current_path: str = "/app/dashboard"):
             ),
             Title("Field Station"),
             Style(APP_CSS),
-            Script(src="https://unpkg.com/htmx.org@2.0.4"),
+            Script(src="https://unpkg.com/htmx.org@2.0.4",
+                   integrity="sha384-OLBgp1GsljhM2TJ+sbHjaiH9txEUvgdDTAzHv2P24donTt6/529l+9Ua0vFImLlb",
+                   crossorigin="anonymous"),
         ),
         Body(
             Div(
@@ -697,8 +710,7 @@ def _system_health_section() -> Div:
             cls="health-grid"
         ),
         id="system-health",
-        **{"hx-get": "/app/partials/system-health", "hx-trigger": "every 60s",
-           "hx-swap": "outerHTML"},
+        **SYSTEM_HEALTH_POLL,
     )
 
 
@@ -793,8 +805,7 @@ def partial_dashboard_stats():
         return Div(
             P("Unable to refresh stats.", cls="error-message"),
             cls="widget-grid", id="dashboard-stats",
-            **{"hx-get": "/app/partials/dashboard-stats", "hx-trigger": "every 30s",
-               "hx-swap": "outerHTML"},
+            **DASHBOARD_STATS_POLL,
         )
 
     today_count = summary.get("total_detections", 0)
@@ -830,8 +841,7 @@ def partial_dashboard_stats():
     return Div(
         *children,
         cls="widget-grid", id="dashboard-stats",
-        **{"hx-get": "/app/partials/dashboard-stats", "hx-trigger": "every 30s",
-           "hx-swap": "outerHTML"},
+        **DASHBOARD_STATS_POLL,
     )
 
 
