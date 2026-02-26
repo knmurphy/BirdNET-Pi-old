@@ -5,6 +5,7 @@
 
 import { useState, useEffect } from 'react';
 import { useLiveDetections } from '../../hooks/useDetections';
+import { useTodaySummary } from '../../hooks/useTodaySummary';
 import { DetectionCard } from '../DetectionCard';
 import './Screens.css';
 
@@ -75,6 +76,9 @@ export function LiveScreen() {
 	const { detections, isLoading, isError, error } = useLiveDetections();
 	const [newDetectionIds, setNewDetectionIds] = useState<Set<number>>(new Set());
 
+
+	const { data: summary } = useTodaySummary();
+
 	// Track new detections for animation
 	// When a detection arrives, mark it as "new" for a short period
 	useEffect(() => {
@@ -139,6 +143,20 @@ export function LiveScreen() {
 
 	return (
 		<div className="screen screen--live">
+		{/* Header with summary stats */}
+		<div className="live-feed__header">
+			<div className="live-feed__summary">
+				<div className="live-feed__summary-item">
+					<div className="live-feed__summary-value">{summary?.total_detections ?? 0}</div>
+					<div className="live-feed__summary-label">Detections</div>
+				</div>
+				<div className="live-feed__summary-item">
+					<div className="live-feed__summary-value">{summary?.species_count ?? 0}</div>
+					<div className="live-feed__summary-label">Species</div>
+				</div>
+			</div>
+		</div>
+
 			<div className="live-feed" role="feed" aria-label="Live detection feed">
 				{visibleDetections.map((detection) => (
 					<DetectionCard

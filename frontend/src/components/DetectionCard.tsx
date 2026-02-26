@@ -4,7 +4,8 @@
  */
 
 import type { Detection } from '../types';
-import { getConfidenceColor, formatConfidence } from '../hooks/useDetections';
+import { useAudio } from '../../src/hooks/useAudio';
+import { getConfidenceColor, formatConfidence } from '../../src/hooks/useDetections';
 import './DetectionCard.css';
 
 export interface DetectionCardProps {
@@ -58,17 +59,15 @@ export function DetectionCard({
 	onClick,
 	isNew = false,
 }: DetectionCardProps) {
-	const confidenceColor = getConfidenceColor(detection.confidence, thresholds);
-	const badgeColor = classifierColor ?? getDefaultClassifierColor(detection.classifier);
-	const classifierName = getClassifierDisplayName(detection.classifier);
+	const { audioUrl } = useAudio(detection.id, detection.file_name);
 
 	return (
 		<article
 			className={`detection-card ${isNew ? 'detection-card--new' : ''}`}
 			onClick={onClick}
-			role={onClick ? 'button' : undefined}
-			tabIndex={onClick ? 0 : undefined}
-			aria-label={`${detection.com_name}, confidence ${formatConfidence(detection.confidence)}`}
+			role="button"
+			tabIndex={0}
+			aria-label={`${detection.com_name}, confidence ${formatConfidence(detection.confidence)}, play audio`}
 		>
 			<div className="detection-card__header">
 				<h3 className="detection-card__common-name">{detection.com_name}</h3>
@@ -85,7 +84,7 @@ export function DetectionCard({
 						className="detection-card__confidence-fill"
 						style={{
 							width: `${detection.confidence * 100}%`,
-							backgroundColor: confidenceColor,
+							backgroundColor: classifierColor ?? getDefaultClassifierColor(detection.classifier),
 						}}
 					/>
 				</div>
@@ -95,13 +94,14 @@ export function DetectionCard({
 			</div>
 
 			<div className="detection-card__footer">
+				<audio src={audioUrl} preload="none" style={{ display: 'none' }} />
 				<span className="detection-card__classifier">
 					<span
 						className="detection-card__classifier-dot"
-						style={{ backgroundColor: badgeColor }}
+						style={{ backgroundColor: classifierColor ?? getDefaultClassifierColor(detection.classifier) }}
 						aria-hidden="true"
 					/>
-					<span className="detection-card__classifier-name">{classifierName}</span>
+					<span className="detection-card__classifier-name">{getClassifierDisplayName(detection.classifier)}</span>
 				</span>
 			</div>
 		</article>
