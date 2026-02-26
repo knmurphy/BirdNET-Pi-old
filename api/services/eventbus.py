@@ -1,9 +1,9 @@
 """EventBus for real-time detection events using asyncio pub/sub."""
 
 import asyncio
-from dataclasses import dataclass
+import json
+from dataclasses import dataclass, asdict
 from typing import AsyncGenerator
-from datetime import datetime
 
 
 @dataclass
@@ -21,20 +21,8 @@ class DetectionEvent:
     classifier: str
 
     def to_sse_data(self) -> str:
-        """Convert to SSE data format."""
-        return (
-            f"{{"
-            f'"id": {self.id}, '
-            f'"com_name": "{self.com_name}", '
-            f'"sci_name": "{self.sci_name}", '
-            f'"confidence": {self.confidence}, '
-            f'"date": "{self.date}", '
-            f'"time": "{self.time}", '
-            f'"iso8601": "{self.iso8601}", '
-            f'"file_name": "{self.file_name}", '
-            f'"classifier": "{self.classifier}"'
-            f"}}"
-        )
+        """Convert to SSE data format (JSON-encoded)."""
+        return json.dumps(asdict(self))
 
 
 class EventBus:

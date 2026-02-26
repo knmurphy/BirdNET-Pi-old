@@ -3,24 +3,57 @@ Field Station OS - FastHTML Web Application
 
 A Python-native web UI for passive acoustic monitoring.
 Built with FastHTML for HTMX-based navigation (no iframe, no full page reload).
-
-This version uses the FastAPI backend for data instead of direct database queries.
 """
+import json
 import os
+import shutil
+import sqlite3
 import logging
-import httpx
+import time
 from datetime import datetime
 from urllib.parse import quote as url_quote
 
+from starlette.responses import FileResponse, Response
 from fasthtml.common import (
     FastHTML, serve,
     Html, Head, Body, Title, Meta, Link, Style, Script,
     Main, Nav, Header,
-    Div, H2, A, Audio, Span,
+    Div, H2, H3, P, A, Audio, Source,
 )
 
-# API configuration - connect to FastAPI backend
-API_BASE_URL = os.environ.get("FIELD_STATION_API_URL", "http://127.0.0.1:8003")
+# Database path - can be overridden via environment variable
+DB_PATH = os.environ.get(
+    "BIRDNET_DB_PATH",
+    os.path.join(os.path.dirname(__file__), '..', 'scripts', 'birds.db')
+)
+
+# Recordings path for disk usage calculation
+RECORDINGS_PATH = os.environ.get(
+    "BIRDNET_RECORDINGS_PATH",
+    os.path.expanduser("~/BirdSongs")
+)
+
+# Simple time-based cache for recordings size (expensive os.walk)
+_RECORDINGS_SIZE_CACHE: dict = {"value": 0.0, "ts": 0.0}
+_RECORDINGS_CACHE_TTL = 300  # seconds
+
+
+def _get_recordings_size_gb() -> float:
+    """Return total size of recordings in GB, cached for 5 minutes."""
+    now = time.monotonic()
+    if now - _RECORDINGS_SIZE_CACHE["ts"] < _RECORDINGS_CACHE_TTL:
+        return _RECORDINGS_SIZE_CACHE["value"]
+    total_bytes = 0
+    if os.path.exists(RECORDINGS_PATH):
+        total_bytes = sum(
+            os.path.getsize(os.path.join(dirpath, fname))
+            for dirpath, _, fnames in os.walk(RECORDINGS_PATH)
+            for fname in fnames
+        )
+    result = total_bytes / (1024 ** 3)
+    _RECORDINGS_SIZE_CACHE["value"] = result
+    _RECORDINGS_SIZE_CACHE["ts"] = now
+    return result
 
 # Station display name shown in the header (override via env var)
 STATION_MODEL = os.environ.get("STATION_MODEL", "BirdNET-Pi · RPi 4B")
@@ -39,19 +72,146 @@ DISK_WARN = 70
 DISK_DANGER = 85
 
 
-def api_get(endpoint: str) -> dict | None:
-    """Make a GET request to the FastAPI backend."""
+def get_today_detection_count() -> int:
+    """Return the total number of detections today."""
+    con = None
     try:
-        with httpx.Client(timeout=5.0) as client:
-            response = client.get(f"{API_BASE_URL}{endpoint}")
-            response.raise_for_status()
-            return response.json()
-    except httpx.HTTPError as e:
-        logging.error(f"API request failed for {endpoint}: {e}")
+        con = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
+        today = datetime.now().strftime("%Y-%m-%d")
+        cur = con.execute("SELECT COUNT(*) FROM detections WHERE Date = ?", (today,))
+        row = cur.fetchone()
+        return row[0] if row else 0
+    except sqlite3.Error:
+        return 0
+    finally:
+        if con:
+            con.close()
+
+
+def get_today_species_count() -> int:
+    """Return the count of distinct species detected today."""
+    con = None
+    try:
+        con = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
+        today = datetime.now().strftime("%Y-%m-%d")
+        cur = con.execute(
+            "SELECT COUNT(DISTINCT Com_Name) FROM detections WHERE Date = ?", (today,)
+        )
+        row = cur.fetchone()
+        return row[0] if row else 0
+    except sqlite3.Error:
+        return 0
+    finally:
+        if con:
+            con.close()
+
+
+def get_total_detection_count() -> int:
+    """Return the total number of detections (all time)."""
+    con = None
+    try:
+        con = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
+        cur = con.execute("SELECT COUNT(*) FROM detections")
+        row = cur.fetchone()
+        return row[0] if row else 0
+    except sqlite3.Error:
+        return 0
+    finally:
+        if con:
+            con.close()
+
+
+def get_total_species_count() -> int:
+    """Return the count of distinct species (all time)."""
+    con = None
+    try:
+        con = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
+        cur = con.execute("SELECT COUNT(DISTINCT Com_Name) FROM detections")
+        row = cur.fetchone()
+        return row[0] if row else 0
+    except sqlite3.Error:
+        return 0
+    finally:
+        if con:
+            con.close()
+
+
+def get_latest_detection() -> dict | None:
+    """Return the most recent detection, or None if unavailable."""
+    con = None
+    try:
+        con = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
+        con.row_factory = sqlite3.Row
+        cur = con.execute(
+            "SELECT Com_Name, Sci_Name, Date, Time, Confidence, File_Name "
+            "FROM detections ORDER BY Date DESC, Time DESC LIMIT 1"
+        )
+        row = cur.fetchone()
+        if row:
+            return {
+                "com_name": row["Com_Name"],
+                "sci_name": row["Sci_Name"],
+                "date": row["Date"],
+                "time": row["Time"],
+                "confidence": row["Confidence"],
+                "file_name": row["File_Name"],
+            }
         return None
-    except Exception as e:
-        logging.error(f"Unexpected error calling API {endpoint}: {e}")
+    except sqlite3.Error:
         return None
+    finally:
+        if con:
+            con.close()
+
+
+def get_hourly_detections() -> dict:
+    """Return a dict mapping hour (int 0-23) to detection count for today."""
+    con = None
+    try:
+        con = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
+        today = datetime.now().strftime("%Y-%m-%d")
+        cur = con.execute(
+            "SELECT CAST(strftime('%H', Time) AS INTEGER) as hour, COUNT(*) "
+            "FROM detections WHERE Date = ? GROUP BY hour",
+            (today,)
+        )
+        rows = cur.fetchall()
+        return {int(row[0]): row[1] for row in rows}
+    except sqlite3.Error:
+        return {}
+    finally:
+        if con:
+            con.close()
+
+
+def get_system_health() -> dict:
+    """Return system health metrics including disk, database, and recordings size."""
+    try:
+        disk = shutil.disk_usage("/")
+        disk_used_gb = (disk.total - disk.free) / (1024 ** 3)
+        disk_total_gb = disk.total / (1024 ** 3)
+        disk_percent = (disk_used_gb / disk_total_gb * 100) if disk_total_gb > 0 else 0.0
+
+        db_path = os.path.abspath(DB_PATH)
+        db_size_mb = os.path.getsize(db_path) / (1024 ** 2) if os.path.exists(db_path) else 0.0
+
+        recordings_gb = _get_recordings_size_gb()
+
+        return {
+            "disk_used_gb": disk_used_gb,
+            "disk_total_gb": disk_total_gb,
+            "disk_percent": disk_percent,
+            "db_size_mb": db_size_mb,
+            "recordings_gb": recordings_gb,
+        }
+    except Exception:
+        return {
+            "disk_used_gb": 0.0,
+            "disk_total_gb": 0.0,
+            "disk_percent": 0.0,
+            "db_size_mb": 0.0,
+            "recordings_gb": 0.0,
+        }
 
 
 # Design System - Dark Theme (adapted from birdnet-field-station.jsx)
@@ -628,34 +788,174 @@ a:hover { text-decoration: underline; }
   margin: 12px 16px;
 }
 
-/* ── Settings form ── */
-.settings-section { padding: 0; }
-
-/* ── Audio player in detection rows ── */
-.det-row-audio {
-  height: 24px;
-  width: 90px;
-  flex-shrink: 0;
+/* Live status indicator */
+.live-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text2);
+}
+.live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text3);
+}
+.live-dot.connected {
+  background: var(--accent);
+  animation: pulse 2s infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
 }
 
-/* ── Layout utility classes ── */
-.grid-2col {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+/* Live feed */
+.live-feed {
+  margin-top: var(--space-4);
 }
-.widget-cell {
-  border: none;
-  border-bottom: 1px solid var(--border);
-  padding: 12px 14px;
+.live-feed-item {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  margin-bottom: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  animation: fadeIn 0.3s ease;
 }
-.widget-cell-border-right {
-  border-right: 1px solid var(--border);
+.live-feed-item .feed-time {
+  color: var(--text3);
+  font-size: 11px;
+}
+.live-feed-item .feed-species {
+  color: var(--accent);
+  font-weight: bold;
+}
+.live-feed-item .feed-confidence {
+  color: var(--text2);
+  font-size: 11px;
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* HTMX swap transitions */
+.htmx-swapping { opacity: 0.5; transition: opacity 0.2s ease; }
+
+/* Responsive */
+@media (max-width: 640px) {
+  .bottom-nav { display: flex; }
+  #content { padding-bottom: 72px; }
+  .widget-grid { grid-template-columns: 1fr 1fr; }
+  .widget-value { font-size: 22px; }
 }
 """
 
+# JavaScript for SSE live updates
+LIVE_JS = """
+(function() {
+  var API_URL = %s;
+  var evtSrc = null;
+  var feedMax = 20;
+
+  function setStatus(connected) {
+    var dot = document.getElementById('live-dot');
+    var label = document.getElementById('live-label');
+    if (dot) dot.className = connected ? 'live-dot connected' : 'live-dot';
+    if (label) label.textContent = connected ? 'LIVE' : 'OFFLINE';
+  }
+
+  function connect() {
+    if (!document.getElementById('live-feed')) return;
+    if (evtSrc) { evtSrc.close(); }
+    evtSrc = new EventSource(API_URL + '/api/events');
+
+    evtSrc.addEventListener('connected', function() { setStatus(true); });
+
+    evtSrc.addEventListener('detection', function(e) {
+      try {
+        var d = JSON.parse(e.data);
+        addFeedItem(d);
+        incrementCounter('today-count');
+      } catch(err) {}
+    });
+
+    evtSrc.onerror = function() {
+      setStatus(false);
+      evtSrc.close();
+      setTimeout(connect, 5000);
+    };
+  }
+
+  function addFeedItem(d) {
+    var feed = document.getElementById('live-feed');
+    if (!feed) return;
+    var empty = document.getElementById('feed-empty');
+    if (empty) empty.remove();
+    var conf = (d.confidence * 100).toFixed(0);
+    var item = document.createElement('div');
+    item.className = 'live-feed-item';
+    item.innerHTML = '<span class="feed-time">' + d.time + '</span> '
+      + '<span class="feed-species">' + escapeHtml(d.com_name) + '</span> '
+      + '<span class="feed-confidence">(' + conf + '%%)</span>';
+    feed.insertBefore(item, feed.firstChild);
+    while (feed.children.length > feedMax) { feed.removeChild(feed.lastChild); }
+  }
+
+  function incrementCounter(id) {
+    var el = document.getElementById(id);
+    if (el) {
+      var n = parseInt(el.textContent, 10);
+      if (!isNaN(n)) el.textContent = String(n + 1);
+    }
+  }
+
+  function escapeHtml(s) {
+    var d = document.createElement('div');
+    d.appendChild(document.createTextNode(s));
+    return d.innerHTML;
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', connect);
+  } else {
+    connect();
+  }
+})();
+"""
+
+
+# HTMX polling configuration (shared between initial render and partials)
+DASHBOARD_STATS_POLL = {
+    "hx-get": "/app/partials/dashboard-stats",
+    "hx-trigger": "every 30s",
+    "hx-swap": "outerHTML",
+}
+SYSTEM_HEALTH_POLL = {
+    "hx-get": "/app/partials/system-health",
+    "hx-trigger": "every 60s",
+    "hx-swap": "outerHTML",
+}
 
 # Create the FastHTML application
 app = FastHTML()
+
+
+@app.get("/audio/{file_name:path}")
+def serve_audio(file_name: str):
+    """Serve a recording audio file, guarding against path traversal."""
+    recordings_dir = os.path.realpath(RECORDINGS_PATH)
+    requested = os.path.realpath(os.path.join(recordings_dir, file_name))
+    # Only allow paths strictly inside the recordings directory
+    if not requested.startswith(recordings_dir + os.sep):
+        return Response(status_code=404)
+    if not os.path.isfile(requested):
+        return Response(status_code=404)
+    return FileResponse(requested, media_type="audio/wav")
 
 
 @app.get("/app/dashboard")
@@ -665,96 +965,61 @@ def dashboard():
 
 
 def _dashboard_content():
-    """Generate the dashboard content using the API."""
-    summary = api_get("/api/detections/today/summary")
+    """Generate the dashboard content using direct database queries."""
+    today_count = get_today_detection_count()
+    species_count = get_today_species_count()
+    latest = get_latest_detection()
 
-    if summary is None:
-        return Div(
-            H2("Dashboard"),
-            Div(
-                Div(cls="station-dot", style="margin: 0 auto 8px"),
-                Div("Unable to connect to the backend API.", cls="error-message"),
-                style="padding: 32px 16px; text-align: center;",
-            ),
-        )
-
-    today_count = summary.get("total_detections", 0)
-    species_count = summary.get("species_count", 0)
-    top_species = summary.get("top_species", [])
-    hourly_counts = summary.get("hourly_counts", [0] * 24)
-
-    # Summary strip
-    strip = Div(
-        Div(
-            Div(str(today_count), cls="widget-value sum-val"),
-            Div("Today", cls="sum-label"),
-            cls="sum-cell widget",
-        ),
-        Div(
-            Div(str(species_count), cls="widget-value sum-val"),
-            Div("Species", cls="sum-label"),
-            cls="sum-cell widget",
-        ),
-        Div(
-            Div(str(max(hourly_counts) if hourly_counts else 0), cls="widget-value sum-val"),
-            Div("Peak/hr", cls="sum-label"),
-            cls="sum-cell widget",
-        ),
-        cls="summary-strip",
-    )
-
-    # Latest detection
-    if top_species:
-        sp = top_species[0]
-        com_name = sp.get("com_name", "Unknown")
-        det_count = sp.get("count", 0)
-        latest_section = Div(
-            Div(
-                Div("Latest Detection", cls="section-label-title"),
-                Div("Today's Top Species", cls="section-label-meta"),
-                cls="section-label",
-            ),
-            Div(
-                Div(com_name, cls="det-comname"),
-                Div(f"{det_count} detection{'s' if det_count != 1 else ''} today", cls="det-sciname"),
-                cls="det-card",
-            ),
+    if latest:
+        latest_widget = Div(
+            Div("Latest Detection", cls="widget-label"),
+            Div(latest["com_name"], cls="widget-value", style="font-size: 14px;"),
+            cls="widget"
         )
     else:
-        latest_section = Div(
-            Div(
-                Div("Latest Detection", cls="section-label-title"),
-                cls="section-label",
-            ),
-            Div(
-                Div("No detections yet today", style="font-family:var(--font-mono);font-size:11px;color:var(--text3);padding:20px 16px;"),
-            ),
+        latest_widget = Div(
+            Div("Latest Detection", cls="widget-label"),
+            Div("No detections yet", cls="widget-value", style="font-size: 14px;"),
+            cls="widget"
         )
 
-    # Activity chart
-    activity = _hourly_activity_chart(hourly_counts)
-
     return Div(
-        strip,
-        latest_section,
-        activity,
+        H2("Dashboard"),
         Div(
             Div(
-                Div("Today's Detections", cls="section-label-title"),
-                cls="section-label",
-            ),
-            Div(
-                Div(str(today_count), cls="widget-value"),
                 Div("Today's Detections", cls="widget-label"),
-                cls="widget widget-cell widget-cell-border-right",
+                Div(str(today_count), cls="widget-value", id="today-count"),
+                cls="widget"
             ),
             Div(
-                Div(str(species_count), cls="widget-value"),
                 Div("Today's Species", cls="widget-label"),
-                cls="widget widget-cell",
+                Div(str(species_count), cls="widget-value", id="species-count"),
+                cls="widget"
             ),
-            cls="grid-2col",
+            *(
+                [Div(
+                    Div("Top Species", cls="widget-label"),
+                    Div(
+                        ", ".join([s["com_name"] for s in top_species[:3]]),
+                        cls="widget-value", style="font-size: 14px;",
+                        id="top-species",
+                    ),
+                    cls="widget"
+                )] if top_species else []
+            ),
+            cls="widget-grid",
+            id="dashboard-stats",
+            **DASHBOARD_STATS_POLL,
         ),
+        # Live detection feed
+        H3("Live Feed"),
+        Div(
+            Span("", id="live-dot", cls="live-dot"),
+            Span("CONNECTING", id="live-label"),
+            cls="live-indicator",
+        ),
+        latest_widget,
+        cls="widget-grid"
     )
 
 
@@ -781,13 +1046,8 @@ def _shell(content, current_path: str = "/app/dashboard"):
         for icon, label, path, aria_label in tabs
     ]
 
-    fonts_url = (
-        "https://fonts.googleapis.com/css2?"
-        "family=DM+Mono:ital,wght@0,300;0,400;1,300"
-        "&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,600;1,9..144,400"
-        "&family=Source+Serif+4:ital,opsz,wght@0,8..60,300;0,8..60,400;1,8..60,300"
-        "&display=swap"
-    )
+    # Safely inject the API URL into the SSE JavaScript via JSON encoding
+    live_js = LIVE_JS % json.dumps(API_BASE_URL.rstrip("/"))
 
     return Html(
         Head(
@@ -796,9 +1056,19 @@ def _shell(content, current_path: str = "/app/dashboard"):
             Meta(name="theme-color", content="#0D0F0B"),
             Link(rel="preconnect", href="https://fonts.googleapis.com"),
             Link(rel="preconnect", href="https://fonts.gstatic.com", crossorigin=""),
-            Link(rel="stylesheet", href=fonts_url),
+            Link(
+                rel="stylesheet",
+                href=(
+                    "https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500"
+                    "&family=Fraunces:wght@400;700"
+                    "&family=Source+Serif+4:ital,wght@0,400;1,400&display=swap"
+                ),
+            ),
             Title("Field Station"),
             Style(APP_CSS),
+            Script(src="https://unpkg.com/htmx.org@2.0.4/dist/htmx.min.js",
+                   integrity="sha384-OLBgp1GsljhM2TJ+sbHjaiH9txEUvgdDTAzHv2P24donTt6/529l+9Ua0vFImLlb",
+                   crossorigin="anonymous"),
         ),
         Body(
             Div(
@@ -818,43 +1088,7 @@ def _shell(content, current_path: str = "/app/dashboard"):
                 Nav(*nav_links, cls="bottom-nav", aria_label="Main navigation"),
                 cls="app-shell",
             ),
-            Script("""
-                (function() {
-                    function tick() {
-                        var el = document.getElementById('clock');
-                        if (el) {
-                            var now = new Date();
-                            el.textContent = now.toTimeString().slice(0, 8);
-                        }
-                    }
-                    tick();
-                    setInterval(tick, 1000);
-                })();
-            """),
-        ),
-    )
-
-
-def _hourly_activity_chart(hourly_counts: list) -> Div:
-    """Render a compact bar chart for hourly detection counts (CSS-based)."""
-    max_count = max(hourly_counts) if any(hourly_counts) else 1
-    current_hour = datetime.now().hour
-    bars = []
-    for h in range(24):
-        count = hourly_counts[h] if h < len(hourly_counts) else 0
-        pct = int((count / max_count) * 100) if max_count > 0 else 0
-        bar_cls = "chart-bar current" if h == current_hour else ("chart-bar active" if count > 0 else "chart-bar")
-        wrap_children = [Div(cls=bar_cls, style=f"height:{max(2, pct)}%")]
-        if h % 6 == 0:
-            wrap_children.append(Span(f"{h:02d}", cls="chart-hour"))
-        bars.append(Div(*wrap_children, cls="chart-bar-wrap"))
-
-    total = sum(hourly_counts)
-    return Div(
-        Div(
-            Span("DETECTIONS / HOUR", cls="chart-title"),
-            Span(f"{total} TODAY", style="color:var(--accent);font-family:var(--font-mono);font-size:9px;"),
-            style="display:flex;justify-content:space-between;margin-bottom:10px;",
+            Script(live_js),
         ),
         Div(*bars, cls="chart-bars"),
         cls="activity-chart",
@@ -888,64 +1122,49 @@ def _conf_dot_color(confidence: float) -> str:
 
 
 def _detections_content():
-    """Generate the detections list content using the API."""
-    data = api_get("/api/species/today")
-
-    if data is None:
+    """Generate the detections list content using direct database queries."""
+    con = None
+    rows = None
+    try:
+        con = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
+        today = datetime.now().strftime("%Y-%m-%d")
+        cur = con.execute(
+            "SELECT Com_Name, Sci_Name, Time, Confidence, File_Name "
+            "FROM detections WHERE Date = ? ORDER BY Time DESC LIMIT 50",
+            (today,)
+        )
+        rows = cur.fetchall()
+    except sqlite3.Error as e:
+        logging.error(f"Database error in _detections_content: {e}")
         return Div(
             H2("Today's Detections"),
-            Div("Unable to load detections. Is the backend running?", cls="error-message"),
+            P("Unable to load detections", cls="error-message"),
         )
+    finally:
+        if con:
+            con.close()
 
-    species_list = data.get("species", [])
+    if not rows:
+        return Div(H2("Today's Detections"), P("No detections yet today."))
 
-    if not species_list:
-        return Div(
-            H2("Today's Detections"),
+    items = []
+    for row in rows:
+        com_name, sci_name, time, confidence, file_name = row
+        conf_class = _confidence_class(confidence or 0.0)
+        audio_el = Audio(
+            Source(src=f"/audio/{file_name}", type="audio/wav"),
+            controls=True,
+        ) if file_name else P("(no audio)")
+        items.append(
             Div(
-                "No detections yet today.",
-                style="font-family:var(--font-mono);font-size:11px;color:var(--text3);padding:32px 16px;text-align:center;",
-            ),
-        )
-
-    rows = []
-    for s in species_list[:50]:
-        conf = s.get("max_confidence", 0)
-        dot_color = _conf_dot_color(conf)
-        conf_cls = _confidence_class(conf)
-        file_name = s.get("file_name", "")
-        audio_url = f"{API_BASE_URL}/api/audio/{url_quote(file_name)}" if file_name else ""
-
-        row_children = [
-            Div(cls="conf-dot", style=f"background:{dot_color}"),
-            Div(
-                Div(s["com_name"], cls="det-row-name"),
-                Div(s.get("sci_name", ""), cls="det-row-sci"),
-                cls="det-row-body",
-            ),
-            Div(f"{conf * 100:.0f}%", cls=f"det-row-conf {conf_cls}"),
-            Div(s.get("last_seen", ""), cls="det-row-time"),
-        ]
-        if audio_url:
-            row_children.append(
-                Audio(
-                    src=audio_url,
-                    controls=True,
-                    preload="none",
-                    cls="det-row-audio",
-                    title=f"Audio recording of {s['com_name']}",
-                )
+                Div(f"{com_name} ({sci_name}) — {time} — {(confidence or 0)*100:.0f}%",
+                    cls=conf_class),
+                audio_el,
+                cls="detection-item"
             )
-        rows.append(Div(*row_children, cls="det-row"))
+        )
 
-    return Div(
-        Div(
-            Div("TODAY'S DETECTIONS", cls="section-label-title"),
-            Div(f"{len(species_list)} species", cls="section-label-meta"),
-            cls="section-label",
-        ),
-        *rows,
-    )
+    return Div(H2("Today's Detections"), *items)
 
 
 @app.get("/app/species")
@@ -955,55 +1174,39 @@ def species():
 
 
 def _species_content():
-    """Generate the species list content using the API."""
-    data = api_get("/api/species/today")
-
-    if data is None:
+    """Generate the species list content using direct database queries."""
+    con = None
+    rows = None
+    try:
+        con = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
+        today = datetime.now().strftime("%Y-%m-%d")
+        cur = con.execute(
+            "SELECT Com_Name, Sci_Name, COUNT(*) as cnt, MAX(Confidence) as max_conf "
+            "FROM detections WHERE Date = ? GROUP BY Sci_Name ORDER BY Com_Name ASC",
+            (today,)
+        )
+        rows = cur.fetchall()
+    except sqlite3.Error as e:
+        logging.error(f"Database error in _species_content: {e}")
         return Div(
             H2("Today's Species"),
-            Div("Error loading species. Is the backend running?", cls="error-message"),
+            P("Error loading species", cls="error-message"),
         )
+    finally:
+        if con:
+            con.close()
 
-    species_list = data.get("species", [])
+    if not rows:
+        return Div(H2("Today's Species"), P("No species detected today."))
 
-    if not species_list:
-        return Div(
-            H2("Today's Species"),
-            Div(
-                "No species detected today.",
-                style="font-family:var(--font-mono);font-size:11px;color:var(--text3);padding:32px 16px;text-align:center;",
-            ),
-        )
-
-    cards = []
-    for s in species_list:
-        conf = s.get("max_confidence", 0)
-        conf_cls = _confidence_class(conf)
-        count = s.get("detection_count", 0)
-        last_seen = s.get("last_seen", "")
-
-        cards.append(
-            Div(
-                Div(str(count), cls="sp-count"),
-                Div(s["com_name"], cls="sp-name"),
-                Div(s.get("sci_name", ""), cls="sp-sci"),
-                Div(
-                    Span(last_seen, cls="sp-last"),
-                    Span(f"{conf * 100:.0f}%", cls=f"sp-last {conf_cls}"),
-                    cls="sp-meta",
-                ),
-                cls="species-card",
-            )
-        )
-
-    return Div(
+    items = [
         Div(
-            Div("SPECIES", cls="section-label-title"),
-            Div(f"{len(species_list)} today", cls="section-label-meta"),
-            cls="section-label",
-        ),
-        Div(*cards, cls="species-grid"),
-    )
+            f"{row[0]} ({row[1]}) — {row[2]} detections (max: {(row[3] or 0)*100:.0f}%)",
+            cls=_confidence_class(row[3] or 0.0)
+        )
+        for row in rows
+    ]
+    return Div(H2("Today's Species"), *items)
 
 
 @app.get("/app/stats")
@@ -1013,22 +1216,23 @@ def stats():
 
 
 def _hourly_activity_section() -> Div:
-    """Generate hourly activity bar chart section using API data."""
-    summary = api_get("/api/detections/today/summary")
+    """Generate hourly activity bar chart for today using database data."""
+    hourly_data = get_hourly_detections()
 
-    if summary is None:
+    if not hourly_data:
         return Div(
-            Div(
-                Div("Today's Activity", cls="section-label-title"),
-                cls="section-label",
-            ),
-            Div("Unable to load activity data.", cls="error-message"),
+            H3("Today's Activity"),
+            P("No detections yet today.", cls="text2"),
+            cls="hourly-chart"
         )
 
-    hourly_counts = summary.get("hourly_counts", [0] * 24)
+    max_count = max(hourly_data.values()) if hourly_data else 1
 
-    if not any(hourly_counts):
-        return Div(
+    bar_rows = []
+    for hour in range(24):
+        count = hourly_data.get(hour, 0)
+        bar_width = (count / max_count * 100) if max_count > 0 else 0
+        bar_rows.append(
             Div(
                 Div("Today's Activity", cls="section-label-title"),
                 cls="section-label",
@@ -1039,7 +1243,6 @@ def _hourly_activity_section() -> Div:
             ),
         )
 
-    chart = _hourly_activity_chart(hourly_counts)
     return Div(
         Div(
             Div("Today's Activity", cls="section-label-title"),
@@ -1050,14 +1253,22 @@ def _hourly_activity_section() -> Div:
 
 
 def _system_health_section() -> Div:
-    """Generate system health readout section using API data."""
-    system = api_get("/api/system")
+    """Generate system health widgets using direct system queries."""
+    health = get_system_health()
 
-    if system is None:
-        return Div(
+    return Div(
+        H3("System Health"),
+        Div(
             Div(
-                Div("System Health", cls="section-label-title"),
-                cls="section-label",
+                Div("Disk Usage", cls="health-label"),
+                Div(f"{health['disk_used_gb']:.1f} / {health['disk_total_gb']:.0f} GB", cls="health-value"),
+                Div(f"{health['disk_percent']:.1f}% used", cls="health-detail"),
+                cls="health-item"
+            ),
+            Div(
+                Div("Database", cls="health-label"),
+                Div(f"{health['db_size_mb']:.1f} MB", cls="health-value"),
+                cls="health-item"
             ),
             Div("Unable to load system data.", cls="error-message"),
         )
@@ -1078,8 +1289,9 @@ def _system_health_section() -> Div:
         children = [
             Div(label, cls="readout-label"),
             Div(
-                Span(value, style=f"color:{color};font-family:var(--font-mono);font-size:20px;line-height:1;"),
-                Span(f" {unit}", cls="readout-unit") if unit else "",
+                Div("Recordings", cls="health-label"),
+                Div(f"{health['recordings_gb']:.2f} GB", cls="health-value"),
+                cls="health-item"
             ),
         ]
         if gauge_pct is not None:
@@ -1105,36 +1317,39 @@ def _system_health_section() -> Div:
             cls="readout-grid",
             style="padding: 12px 16px 14px;",
         ),
+        id="system-health",
+        **SYSTEM_HEALTH_POLL,
     )
 
 
 def _stats_content():
-    """Generate the stats content using the API."""
-    summary = api_get("/api/detections/today/summary")
-
-    if summary is None:
-        return Div(
-            H2("Statistics"),
-            Div("Unable to connect to the backend API.", cls="error-message"),
-        )
-
-    today_detections = summary.get("total_detections", 0)
-    today_species = summary.get("species_count", 0)
+    """Generate the stats content using direct database queries."""
+    today_count = get_today_detection_count()
+    total_count = get_total_detection_count()
+    today_species = get_today_species_count()
+    total_species = get_total_species_count()
 
     return Div(
         H2("Statistics"),
         Div(
-            Div(
-                Div(str(today_detections), cls="widget-value"),
-                Div("Today's Detections", cls="widget-label"),
-                cls="widget widget-cell widget-cell-border-right",
-            ),
-            Div(
-                Div(str(today_species), cls="widget-value"),
-                Div("Today's Species", cls="widget-label"),
-                cls="widget widget-cell",
-            ),
-            cls="grid-2col",
+            Div("Today's Detections", cls="widget-label"),
+            Div(f"{today_count:,}", cls="widget-value"),
+            cls="widget"
+        ),
+        Div(
+            Div("Total Detections", cls="widget-label"),
+            Div(f"{total_count:,}", cls="widget-value"),
+            cls="widget"
+        ),
+        Div(
+            Div("Today's Species", cls="widget-label"),
+            Div(f"{today_species:,}", cls="widget-value"),
+            cls="widget"
+        ),
+        Div(
+            Div("Total Species", cls="widget-label"),
+            Div(f"{total_species:,}", cls="widget-value"),
+            cls="widget"
         ),
         _hourly_activity_section(),
         _system_health_section(),
@@ -1148,58 +1363,69 @@ def settings():
 
 
 def _settings_content():
-    """Generate the settings content using the API."""
-    settings_data = api_get("/api/settings")
-    classifiers = api_get("/api/classifiers")
+    """Generate the settings content."""
+    return Div(
+        H2("Settings"),
+        P("Settings are managed via the BirdNET-Pi configuration file.", cls="text2"),
+    )
 
-    if settings_data is None:
+
+# --- HTMX Partial Routes (return fragments, not full pages) ---
+
+
+@app.get("/app/partials/dashboard-stats")
+def partial_dashboard_stats():
+    """Return just the dashboard stats widget grid (for HTMX polling)."""
+    summary = api_get("/api/detections/today/summary")
+
+    if summary is None:
         return Div(
-            H2("Settings"),
-            Div("Unable to connect to the backend API.", cls="error-message"),
+            P("Unable to refresh stats.", cls="error-message"),
+            cls="widget-grid", id="dashboard-stats",
+            **DASHBOARD_STATS_POLL,
         )
 
-    def setting_item(label, value):
-        return Div(
-            Div(label, cls="health-label"),
-            Div(str(value), cls="health-value"),
-            cls="health-item",
-        )
+    today_count = summary.get("total_detections", 0)
+    species_count = summary.get("species_count", 0)
+    top_species = summary.get("top_species", [])
 
-    items = [
+    children = [
         Div(
-            Div("CONFIGURATION", cls="section-label-title"),
-            cls="section-label",
+            Div("Today's Detections", cls="widget-label"),
+            Div(str(today_count), cls="widget-value", id="today-count"),
+            cls="widget"
         ),
         Div(
-            setting_item("Audio Path", settings_data.get("audio_path", "N/A")),
-            setting_item(
-                "Location",
-                f"{settings_data.get('latitude', 0):.4f}, {settings_data.get('longitude', 0):.4f}",
-            ),
-            setting_item(
-                "Confidence Threshold",
-                f"{settings_data.get('confidence_threshold', 0.8) * 100:.0f}%",
-            ),
-            cls="health-grid",
+            Div("Today's Species", cls="widget-label"),
+            Div(str(species_count), cls="widget-value", id="species-count"),
+            cls="widget"
         ),
     ]
 
-    if classifiers:
-        classifier_names = [c["name"] for c in classifiers if c.get("enabled", False)]
-        items.append(
+    if top_species:
+        children.append(
             Div(
-                Div("CLASSIFIERS", cls="section-label-title"),
-                cls="section-label",
-            ),
-        )
-        items.append(
-            Div(
-                setting_item("Active Classifiers", ", ".join(classifier_names) or "None"),
-                cls="health-grid",
+                Div("Top Species", cls="widget-label"),
+                Div(
+                    ", ".join([s["com_name"] for s in top_species[:3]]),
+                    cls="widget-value", style="font-size: 14px;",
+                    id="top-species",
+                ),
+                cls="widget"
             )
         )
 
-    return Div(*items)
+    return Div(
+        *children,
+        cls="widget-grid", id="dashboard-stats",
+        **DASHBOARD_STATS_POLL,
+    )
+
+
+@app.get("/app/partials/system-health")
+def partial_system_health():
+    """Return just the system health section (for HTMX polling)."""
+    return _system_health_section()
 
 
 if __name__ == "__main__":
