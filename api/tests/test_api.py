@@ -247,3 +247,68 @@ class TestSettingsUpdate:
         # File should be unchanged
         content = conf.read_text()
         assert "LATITUDE=10.0" in content
+
+
+class TestSystemRestart:
+    """Tests for POST /api/system/restart endpoint."""
+
+    def test_restart_requires_confirm(self, client):
+        """POST with confirm=False returns 400."""
+        response = client.post("/api/system/restart", json={
+            "confirm": False,
+        })
+        assert response.status_code == 400
+
+    def test_restart_missing_confirm(self, client):
+        """POST with {} returns 422 (confirm is required)."""
+        response = client.post("/api/system/restart", json={})
+        assert response.status_code == 422
+
+    def test_restart_with_confirm(self, client):
+        """POST with confirm=True returns 200 with status='restarting'."""
+        response = client.post("/api/system/restart", json={
+            "confirm": True,
+        })
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "restarting"
+        assert data["service"] == "birdnet_analysis"
+
+    def test_restart_invalid_service_name(self, client):
+        """POST with service='../../hack' returns 400."""
+        response = client.post("/api/system/restart", json={
+            "confirm": True,
+            "service": "../../hack",
+        })
+        assert response.status_code == 400
+
+
+class TestSpectrogramEndpoint:
+    """Tests for GET /api/spectrogram endpoint."""
+
+    def test_spectrogram_returns_structure(self, client):
+        """GET /api/spectrogram returns 200 with correct fields."""
+        response = client.get("/api/spectrogram")
+        assert response.status_code == 200
+        data = response.json()
+        assert "status" in data
+        assert "fft_size" in data
+        assert "bins" in data
+        assert "timestamp" in data
+        assert "duration_ms" in data
+        assert "generated_at" in data
+
+    def test_spectrogram_default_not_recording(self, client):
+        """Default status is 'not_recording'."""
+        response = client.get("/api/spectrogram")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "not_recording"
+        assert data["bins"] == []
+
+    def test_spectrogram_accepts_duration_param(self, client):
+        """GET /api/spectrogram?duration=5 returns duration_ms=5000."""
+        response = client.get("/api/spectrogram?duration=5")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["duration_ms"] == 5000

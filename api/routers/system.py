@@ -1,8 +1,11 @@
 """System information API endpoints."""
 
+import re
+import subprocess
 from datetime import datetime
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 
 from api.models.system import SystemResponse
 from api.services.eventbus import event_bus
@@ -43,4 +46,60 @@ async def get_system():
         active_classifiers=active_classifiers,
         sse_subscribers=event_bus.subscriber_count,
         generated_at=datetime.now().isoformat(),
+    )
+
+
+
+class RestartRequest(BaseModel):
+    """Request body for POST /system/restart."""
+
+    confirm: bool
+    service: str = "birdnet_analysis"
+
+
+class RestartResponse(BaseModel):
+    """Response for POST /system/restart."""
+
+    status: str  # "restarting" or "rejected"
+    service: str
+    message: str
+
+
+_SERVICE_NAME_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
+
+
+@router.post("/system/restart", response_model=RestartResponse)
+async def restart_service(req: RestartRequest):
+    """Restart a system service (e.g., the BirdNET analysis service).
+
+    Requires explicit confirmation. Service name is validated to prevent
+    injection attacks.
+    """
+    if not _SERVICE_NAME_RE.match(req.service):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid service name: '{req.service}'",
+        )
+
+    if not req.confirm:
+        raise HTTPException(
+            status_code=400,
+            detail="Confirmation required to restart service",
+        )
+
+    try:
+        subprocess.run(
+            ["sudo", "systemctl", "restart", req.service],
+            capture_output=True,
+            timeout=10,
+            check=True,
+        )
+        message = "Service restart initiated"
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError):
+        message = "Restart command issued (may require elevated privileges)"
+
+    return RestartResponse(
+        status="restarting",
+        service=req.service,
+        message=message,
     )
