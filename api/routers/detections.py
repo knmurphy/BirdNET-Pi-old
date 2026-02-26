@@ -2,12 +2,14 @@
 
 from datetime import date, datetime
 from typing import Optional
+import itertools
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from api.services.database import get_connection, get_duckdb_connection
 from api.models.detection import Detection, TodaySummaryResponse, TopSpecies
+from api.services.eventbus import DetectionEvent, event_bus
 
 router = APIRouter()
 
@@ -193,3 +195,41 @@ async def get_today_summary():
     finally:
         if conn:
             conn.close()
+
+
+
+class DetectionNotifyRequest(BaseModel):
+    """Request body for POST /detections/notify."""
+
+    com_name: str
+    sci_name: str
+    confidence: float
+    classifier: str = "birdnet"
+    file_name: str = ""
+
+
+# Counter for generating detection event IDs within this process
+_notify_id_counter = itertools.count(1)
+
+
+@router.post("/detections/notify")
+async def notify_detection(req: DetectionNotifyRequest):
+    """Publish a detection event to all SSE subscribers.
+
+    Called by the analysis pipeline after write_to_db() commits.
+    Constructs a DetectionEvent and publishes it through the EventBus.
+    """
+    now = datetime.now()
+    event = DetectionEvent(
+        id=next(_notify_id_counter),
+        com_name=req.com_name,
+        sci_name=req.sci_name,
+        confidence=req.confidence,
+        date=now.strftime("%Y-%m-%d"),
+        time=now.strftime("%H:%M:%S"),
+        iso8601=now.isoformat(),
+        file_name=req.file_name,
+        classifier=req.classifier,
+    )
+    delivered = await event_bus.publish(event)
+    return {"status": "published", "subscribers_notified": delivered}
