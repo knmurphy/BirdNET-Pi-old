@@ -4,6 +4,7 @@ Field Station OS - FastHTML Web Application
 A Python-native web UI for passive acoustic monitoring.
 Built with FastHTML for HTMX-based navigation (no iframe, no full page reload).
 """
+import json
 import os
 import shutil
 import sqlite3
@@ -14,7 +15,7 @@ from datetime import datetime
 from starlette.responses import FileResponse, Response
 from fasthtml.common import (
     FastHTML, serve,
-    Html, Head, Body, Title, Meta, Link, Style,
+    Html, Head, Body, Title, Meta, Link, Style, Script,
     Main, Nav, Header,
     Div, H2, H3, P, A, Audio, Source,
 )
@@ -431,6 +432,64 @@ a:hover { text-decoration: underline; }
   border: 1px solid var(--red);
 }
 
+/* Live status indicator */
+.live-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text2);
+}
+.live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text3);
+}
+.live-dot.connected {
+  background: var(--accent);
+  animation: pulse 2s infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* Live feed */
+.live-feed {
+  margin-top: var(--space-4);
+}
+.live-feed-item {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  margin-bottom: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  animation: fadeIn 0.3s ease;
+}
+.live-feed-item .feed-time {
+  color: var(--text3);
+  font-size: 11px;
+}
+.live-feed-item .feed-species {
+  color: var(--accent);
+  font-weight: bold;
+}
+.live-feed-item .feed-confidence {
+  color: var(--text2);
+  font-size: 11px;
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* HTMX swap transitions */
+.htmx-swapping { opacity: 0.5; transition: opacity 0.2s ease; }
+
 /* Responsive */
 @media (max-width: 640px) {
   .bottom-nav { display: flex; }
@@ -440,6 +499,91 @@ a:hover { text-decoration: underline; }
 }
 """
 
+# JavaScript for SSE live updates
+LIVE_JS = """
+(function() {
+  var API_URL = %s;
+  var evtSrc = null;
+  var feedMax = 20;
+
+  function setStatus(connected) {
+    var dot = document.getElementById('live-dot');
+    var label = document.getElementById('live-label');
+    if (dot) dot.className = connected ? 'live-dot connected' : 'live-dot';
+    if (label) label.textContent = connected ? 'LIVE' : 'OFFLINE';
+  }
+
+  function connect() {
+    if (!document.getElementById('live-feed')) return;
+    if (evtSrc) { evtSrc.close(); }
+    evtSrc = new EventSource(API_URL + '/api/events');
+
+    evtSrc.addEventListener('connected', function() { setStatus(true); });
+
+    evtSrc.addEventListener('detection', function(e) {
+      try {
+        var d = JSON.parse(e.data);
+        addFeedItem(d);
+        incrementCounter('today-count');
+      } catch(err) {}
+    });
+
+    evtSrc.onerror = function() {
+      setStatus(false);
+      evtSrc.close();
+      setTimeout(connect, 5000);
+    };
+  }
+
+  function addFeedItem(d) {
+    var feed = document.getElementById('live-feed');
+    if (!feed) return;
+    var empty = document.getElementById('feed-empty');
+    if (empty) empty.remove();
+    var conf = (d.confidence * 100).toFixed(0);
+    var item = document.createElement('div');
+    item.className = 'live-feed-item';
+    item.innerHTML = '<span class="feed-time">' + d.time + '</span> '
+      + '<span class="feed-species">' + escapeHtml(d.com_name) + '</span> '
+      + '<span class="feed-confidence">(' + conf + '%%)</span>';
+    feed.insertBefore(item, feed.firstChild);
+    while (feed.children.length > feedMax) { feed.removeChild(feed.lastChild); }
+  }
+
+  function incrementCounter(id) {
+    var el = document.getElementById(id);
+    if (el) {
+      var n = parseInt(el.textContent, 10);
+      if (!isNaN(n)) el.textContent = String(n + 1);
+    }
+  }
+
+  function escapeHtml(s) {
+    var d = document.createElement('div');
+    d.appendChild(document.createTextNode(s));
+    return d.innerHTML;
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', connect);
+  } else {
+    connect();
+  }
+})();
+"""
+
+
+# HTMX polling configuration (shared between initial render and partials)
+DASHBOARD_STATS_POLL = {
+    "hx-get": "/app/partials/dashboard-stats",
+    "hx-trigger": "every 30s",
+    "hx-swap": "outerHTML",
+}
+SYSTEM_HEALTH_POLL = {
+    "hx-get": "/app/partials/system-health",
+    "hx-trigger": "every 60s",
+    "hx-swap": "outerHTML",
+}
 
 # Create the FastHTML application
 app = FastHTML()
@@ -486,14 +630,37 @@ def _dashboard_content():
     return Div(
         H2("Dashboard"),
         Div(
-            Div("Today's Detections", cls="widget-label"),
-            Div(str(today_count), cls="widget-value"),
-            cls="widget"
+            Div(
+                Div("Today's Detections", cls="widget-label"),
+                Div(str(today_count), cls="widget-value", id="today-count"),
+                cls="widget"
+            ),
+            Div(
+                Div("Today's Species", cls="widget-label"),
+                Div(str(species_count), cls="widget-value", id="species-count"),
+                cls="widget"
+            ),
+            *(
+                [Div(
+                    Div("Top Species", cls="widget-label"),
+                    Div(
+                        ", ".join([s["com_name"] for s in top_species[:3]]),
+                        cls="widget-value", style="font-size: 14px;",
+                        id="top-species",
+                    ),
+                    cls="widget"
+                )] if top_species else []
+            ),
+            cls="widget-grid",
+            id="dashboard-stats",
+            **DASHBOARD_STATS_POLL,
         ),
+        # Live detection feed
+        H3("Live Feed"),
         Div(
-            Div("Today's Species", cls="widget-label"),
-            Div(str(species_count), cls="widget-value"),
-            cls="widget"
+            Span("", id="live-dot", cls="live-dot"),
+            Span("CONNECTING", id="live-label"),
+            cls="live-indicator",
         ),
         latest_widget,
         cls="widget-grid"
@@ -517,6 +684,9 @@ def _shell(content, current_path: str = "/app/dashboard"):
         for name, path in tabs
     ]
 
+    # Safely inject the API URL into the SSE JavaScript via JSON encoding
+    live_js = LIVE_JS % json.dumps(API_BASE_URL.rstrip("/"))
+
     return Html(
         Head(
             Meta(charset="utf-8"),
@@ -533,6 +703,9 @@ def _shell(content, current_path: str = "/app/dashboard"):
             ),
             Title("Field Station"),
             Style(APP_CSS),
+            Script(src="https://unpkg.com/htmx.org@2.0.4/dist/htmx.min.js",
+                   integrity="sha384-OLBgp1GsljhM2TJ+sbHjaiH9txEUvgdDTAzHv2P24donTt6/529l+9Ua0vFImLlb",
+                   crossorigin="anonymous"),
         ),
         Body(
             Div(
@@ -544,6 +717,7 @@ def _shell(content, current_path: str = "/app/dashboard"):
                 Nav(*nav_links, cls="bottom-nav"),
                 cls="app-shell",
             ),
+            Script(live_js),
         ),
     )
 
@@ -718,6 +892,8 @@ def _system_health_section() -> Div:
             ),
             cls="health-grid"
         ),
+        id="system-health",
+        **SYSTEM_HEALTH_POLL,
     )
 
 
@@ -767,6 +943,64 @@ def _settings_content():
         H2("Settings"),
         P("Settings are managed via the BirdNET-Pi configuration file.", cls="text2"),
     )
+
+
+# --- HTMX Partial Routes (return fragments, not full pages) ---
+
+
+@app.get("/app/partials/dashboard-stats")
+def partial_dashboard_stats():
+    """Return just the dashboard stats widget grid (for HTMX polling)."""
+    summary = api_get("/api/detections/today/summary")
+
+    if summary is None:
+        return Div(
+            P("Unable to refresh stats.", cls="error-message"),
+            cls="widget-grid", id="dashboard-stats",
+            **DASHBOARD_STATS_POLL,
+        )
+
+    today_count = summary.get("total_detections", 0)
+    species_count = summary.get("species_count", 0)
+    top_species = summary.get("top_species", [])
+
+    children = [
+        Div(
+            Div("Today's Detections", cls="widget-label"),
+            Div(str(today_count), cls="widget-value", id="today-count"),
+            cls="widget"
+        ),
+        Div(
+            Div("Today's Species", cls="widget-label"),
+            Div(str(species_count), cls="widget-value", id="species-count"),
+            cls="widget"
+        ),
+    ]
+
+    if top_species:
+        children.append(
+            Div(
+                Div("Top Species", cls="widget-label"),
+                Div(
+                    ", ".join([s["com_name"] for s in top_species[:3]]),
+                    cls="widget-value", style="font-size: 14px;",
+                    id="top-species",
+                ),
+                cls="widget"
+            )
+        )
+
+    return Div(
+        *children,
+        cls="widget-grid", id="dashboard-stats",
+        **DASHBOARD_STATS_POLL,
+    )
+
+
+@app.get("/app/partials/system-health")
+def partial_system_health():
+    """Return just the system health section (for HTMX polling)."""
+    return _system_health_section()
 
 
 if __name__ == "__main__":

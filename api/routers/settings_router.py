@@ -16,19 +16,19 @@ class SettingsResponse(BaseModel):
 
     # Audio settings
     audio_path: str
-    
+
     # Location
     latitude: float
     longitude: float
-    
+
     # Model settings
     confidence_threshold: float
     overlap: float
     sensitivity: float
-    
+
     # Processing
     week: int  # -1 for auto
-    
+
     # Server info
     generated_at: str
 
@@ -97,7 +97,7 @@ def parse_config_ini() -> dict[str, Any]:
 async def get_settings():
     """Get current BirdNET-Pi settings from config file."""
     config_values = parse_config_ini()
-    
+
     return SettingsResponse(
         audio_path=str(settings.audio_base_path),
         latitude=config_values["latitude"],

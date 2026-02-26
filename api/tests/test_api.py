@@ -119,3 +119,56 @@ class TestEventsEndpoint:
         # The sync TestClient hangs on infinite streams
         # See: https://github.com/encode/starlette/issues/1562
         pass
+
+
+class TestDetectionNotify:
+    """Tests for the detection notification endpoint."""
+
+    def test_notify_returns_published(self, client):
+        """POST /api/detections/notify should return success."""
+        response = client.post("/api/detections/notify", json={
+            "com_name": "Carolina Wren",
+            "sci_name": "Thryothorus ludovicianus",
+            "confidence": 0.92,
+        })
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "published"
+        assert "subscribers_notified" in data
+
+    def test_notify_requires_com_name(self, client):
+        """POST /api/detections/notify should require com_name."""
+        response = client.post("/api/detections/notify", json={
+            "sci_name": "Thryothorus ludovicianus",
+            "confidence": 0.92,
+        })
+        assert response.status_code == 422
+
+    def test_notify_requires_confidence(self, client):
+        """POST /api/detections/notify should require confidence."""
+        response = client.post("/api/detections/notify", json={
+            "com_name": "Carolina Wren",
+            "sci_name": "Thryothorus ludovicianus",
+        })
+        assert response.status_code == 422
+
+    def test_notify_default_classifier(self, client):
+        """POST /api/detections/notify should default classifier to birdnet."""
+        response = client.post("/api/detections/notify", json={
+            "com_name": "Blue Jay",
+            "sci_name": "Cyanocitta cristata",
+            "confidence": 0.85,
+        })
+        assert response.status_code == 200
+        # No error means the default classifier was applied
+
+    def test_notify_with_custom_classifier(self, client):
+        """POST /api/detections/notify should accept custom classifier."""
+        response = client.post("/api/detections/notify", json={
+            "com_name": "Blue Jay",
+            "sci_name": "Cyanocitta cristata",
+            "confidence": 0.85,
+            "classifier": "custom_model",
+            "file_name": "clip_001.wav",
+        })
+        assert response.status_code == 200

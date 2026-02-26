@@ -10,6 +10,8 @@ from api.services.eventbus import event_bus
 
 router = APIRouter()
 
+HEARTBEAT_INTERVAL_SECONDS = 15.0
+
 
 @router.get("/events")
 async def event_stream():
@@ -18,15 +20,15 @@ async def event_stream():
     Clients can connect to receive detection events as they happen.
     Heartbeat comments are sent every 15 seconds to keep connections alive.
     """
-    
+
     async def generate():
         """Generate SSE event stream."""
         # Send initial connection message
         yield f"event: connected\ndata: {{\"timestamp\": \"{datetime.now().isoformat()}\"}}\n\n"
-        
+
         # Subscribe to detection events
         queue = event_bus.subscribe()
-        
+
         try:
             # Wait for events
             while True:
@@ -39,9 +41,7 @@ async def event_stream():
                 except asyncio.TimeoutError:
                     # Send heartbeat on timeout (every ~15-20 seconds)
                     yield ": heartbeat\n\n"
-                    
         except asyncio.CancelledError:
-            # Client disconnected
             pass
         finally:
             event_bus.unsubscribe(queue)
@@ -52,6 +52,6 @@ async def event_stream():
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",  # Disable nginx buffering
+            "X-Accel-Buffering": "no",
         },
     )
