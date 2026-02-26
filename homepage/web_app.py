@@ -8,8 +8,10 @@ import os
 import shutil
 import sqlite3
 import logging
+import time
 from datetime import datetime
 
+from starlette.responses import FileResponse, Response
 from fasthtml.common import (
     FastHTML, serve,
     Html, Head, Body, Title, Meta, Link, Style,
@@ -28,6 +30,28 @@ RECORDINGS_PATH = os.environ.get(
     "BIRDNET_RECORDINGS_PATH",
     os.path.expanduser("~/BirdSongs")
 )
+
+# Simple time-based cache for recordings size (expensive os.walk)
+_RECORDINGS_SIZE_CACHE: dict = {"value": 0.0, "ts": 0.0}
+_RECORDINGS_CACHE_TTL = 300  # seconds
+
+
+def _get_recordings_size_gb() -> float:
+    """Return total size of recordings in GB, cached for 5 minutes."""
+    now = time.monotonic()
+    if now - _RECORDINGS_SIZE_CACHE["ts"] < _RECORDINGS_CACHE_TTL:
+        return _RECORDINGS_SIZE_CACHE["value"]
+    total_bytes = 0
+    if os.path.exists(RECORDINGS_PATH):
+        total_bytes = sum(
+            os.path.getsize(os.path.join(dirpath, fname))
+            for dirpath, _, fnames in os.walk(RECORDINGS_PATH)
+            for fname in fnames
+        )
+    result = total_bytes / (1024 ** 3)
+    _RECORDINGS_SIZE_CACHE["value"] = result
+    _RECORDINGS_SIZE_CACHE["ts"] = now
+    return result
 
 
 def get_today_detection_count() -> int:
@@ -153,14 +177,7 @@ def get_system_health() -> dict:
         db_path = os.path.abspath(DB_PATH)
         db_size_mb = os.path.getsize(db_path) / (1024 ** 2) if os.path.exists(db_path) else 0.0
 
-        recordings_gb = 0.0
-        if os.path.exists(RECORDINGS_PATH):
-            total_bytes = sum(
-                os.path.getsize(os.path.join(dirpath, fname))
-                for dirpath, _, fnames in os.walk(RECORDINGS_PATH)
-                for fname in fnames
-            )
-            recordings_gb = total_bytes / (1024 ** 3)
+        recordings_gb = _get_recordings_size_gb()
 
         return {
             "disk_used_gb": disk_used_gb,
@@ -425,6 +442,19 @@ a:hover { text-decoration: underline; }
 
 # Create the FastHTML application
 app = FastHTML()
+
+
+@app.get("/audio/{file_name:path}")
+def serve_audio(file_name: str):
+    """Serve a recording audio file, guarding against path traversal."""
+    recordings_dir = os.path.realpath(RECORDINGS_PATH)
+    requested = os.path.realpath(os.path.join(recordings_dir, file_name))
+    # Only allow paths strictly inside the recordings directory
+    if not requested.startswith(recordings_dir + os.sep):
+        return Response(status_code=404)
+    if not os.path.isfile(requested):
+        return Response(status_code=404)
+    return FileResponse(requested, media_type="audio/wav")
 
 
 @app.get("/app/dashboard")
