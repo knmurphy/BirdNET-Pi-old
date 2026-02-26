@@ -3,11 +3,53 @@
 from datetime import date, datetime
 
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 
 from api.services.database import get_connection
+from api.services.eventbus import event_bus, DetectionEvent
 from api.models.detection import TodaySummaryResponse, TopSpecies
 
 router = APIRouter()
+
+
+class DetectionNotification(BaseModel):
+    """Payload for notifying the system of a new detection."""
+
+    com_name: str
+    sci_name: str
+    confidence: float
+    file_name: str = ""
+    classifier: str = "birdnet"
+
+
+class NotifyResponse(BaseModel):
+    """Response for /api/detections/notify."""
+
+    status: str
+    subscribers_notified: int
+
+
+@router.post("/detections/notify", response_model=NotifyResponse)
+async def notify_detection(notification: DetectionNotification):
+    """Publish a new detection event to all SSE subscribers.
+
+    Called by analysis scripts when a new bird is detected.
+    Broadcasts the detection to all connected SSE clients in real time.
+    """
+    now = datetime.now()
+    event = DetectionEvent(
+        id=0,
+        com_name=notification.com_name,
+        sci_name=notification.sci_name,
+        confidence=notification.confidence,
+        date=now.strftime("%Y-%m-%d"),
+        time=now.strftime("%H:%M:%S"),
+        iso8601=now.isoformat(),
+        file_name=notification.file_name,
+        classifier=notification.classifier,
+    )
+    count = await event_bus.publish(event)
+    return NotifyResponse(status="published", subscribers_notified=count)
 
 
 @router.get("/detections/today/summary", response_model=TodaySummaryResponse)

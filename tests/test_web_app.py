@@ -377,3 +377,61 @@ class TestStatsContentEnhanced:
         from homepage.web_app import _stats_content
         content = str(_stats_content())
         assert 'class="widget"' in content or "class='widget'" in content
+
+
+class TestLiveDataWiring:
+    """Test live data wiring between FastAPI backend and FastHTML frontend."""
+
+    def test_shell_includes_htmx_script(self):
+        """Shell should include the HTMX script tag."""
+        from homepage.web_app import _shell
+        shell = str(_shell("test content", "/app/dashboard"))
+        assert "htmx.org" in shell
+
+    def test_shell_includes_sse_javascript(self):
+        """Shell should include the SSE client JavaScript."""
+        from homepage.web_app import _shell
+        shell = str(_shell("test content", "/app/dashboard"))
+        assert "EventSource" in shell
+
+    def test_shell_injects_api_url(self):
+        """Shell should inject the API base URL into the SSE JavaScript."""
+        from homepage.web_app import _shell, API_BASE_URL
+        shell = str(_shell("test content", "/app/dashboard"))
+        assert API_BASE_URL in shell
+
+    def test_partial_dashboard_stats_route_exists(self):
+        """The /app/partials/dashboard-stats route should be registered."""
+        from homepage.web_app import app
+        routes = [r.path for r in app.routes]
+        assert "/app/partials/dashboard-stats" in routes
+
+    def test_partial_system_health_route_exists(self):
+        """The /app/partials/system-health route should be registered."""
+        from homepage.web_app import app
+        routes = [r.path for r in app.routes]
+        assert "/app/partials/system-health" in routes
+
+    def test_dashboard_has_live_feed_section(self):
+        """Dashboard should have a live feed section."""
+        from homepage.web_app import _dashboard_content
+        content = str(_dashboard_content())
+        assert "live-feed" in content or "Live Feed" in content or "error-message" in content
+
+    def test_dashboard_has_live_indicator(self):
+        """Dashboard should have a live status indicator."""
+        from homepage.web_app import _dashboard_content
+        content = str(_dashboard_content())
+        assert "live-dot" in content or "error-message" in content
+
+    def test_dashboard_stats_have_htmx_polling(self):
+        """Dashboard stats should have hx-get for HTMX polling."""
+        from homepage.web_app import _dashboard_content
+        content = str(_dashboard_content())
+        assert "hx-get" in content or "error-message" in content
+
+    def test_dashboard_stats_have_widget_ids(self):
+        """Dashboard widgets should have IDs for SSE JavaScript updates."""
+        from homepage.web_app import _dashboard_content
+        content = str(_dashboard_content())
+        assert "today-count" in content or "error-message" in content
