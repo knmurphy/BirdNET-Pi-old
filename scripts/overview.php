@@ -4,24 +4,40 @@ ini_set('display_errors',1);
 ini_set('session.gc_maxlifetime', 7200);
 session_set_cookie_params(7200);
 session_start();
+require_once 'scripts/common.php';
+$home = get_home();
+$config = get_config();
+
+set_timezone();
 $myDate = date('Y-m-d');
 $chart = "Combo-$myDate.png";
 
-$db = new SQLite3('./scripts/birds.db', SQLITE3_OPEN_CREATE | SQLITE3_OPEN_READWRITE);
-if($db == False) {
-  echo "Database is busy";
-  header("refresh: 0;");
+$db = new SQLite3('./scripts/birds.db', SQLITE3_OPEN_READONLY);
+$db->busyTimeout(1000);
+
+if(isset($_GET['custom_image'])){
+  if(isset($config["CUSTOM_IMAGE"])) {
+  ?>
+    <br>
+    <h3><?php echo $config["CUSTOM_IMAGE_TITLE"]; ?></h3>
+    <?php
+    $image_data = file_get_contents($config["CUSTOM_IMAGE"]);
+    $image_base64 = base64_encode($image_data);
+    $img_tag = "<img src='data:image/png;base64," . $image_base64 . "'>";
+    echo $img_tag;
+  }
+  die();
 }
 
-if (file_exists('./scripts/thisrun.txt')) {
-  $config = parse_ini_file('./scripts/thisrun.txt');
-} elseif (file_exists('./scripts/firstrun.ini')) {
-  $config = parse_ini_file('./scripts/firstrun.ini');
+if(isset($_GET['blacklistimage'])) {
+  ensure_authenticated('You must be authenticated.');
+  $imageid = $_GET['blacklistimage'];
+  $file_handle = fopen($home."/BirdNET-Pi/scripts/blacklisted_images.txt", 'a+');
+  fwrite($file_handle, $imageid . "\n");
+  fclose($file_handle);
+  unset($_SESSION['images']);
+  die("OK");
 }
-
-$user = shell_exec("awk -F: '/1000/{print $1}' /etc/passwd");
-$home = shell_exec("awk -F: '/1000/{print $6}' /etc/passwd");
-$home = trim($home);
 
 if(isset($_GET['fetch_chart_string']) && $_GET['fetch_chart_string'] == "true") {
   $myDate = date('Y-m-d');
@@ -32,77 +48,53 @@ if(isset($_GET['fetch_chart_string']) && $_GET['fetch_chart_string'] == "true") 
 
 if(isset($_GET['ajax_detections']) && $_GET['ajax_detections'] == "true" && isset($_GET['previous_detection_identifier'])) {
 
-  $statement4 = $db->prepare('SELECT Com_Name, Sci_Name, Date, Time, Confidence, File_Name FROM detections ORDER BY Date DESC, Time DESC LIMIT 5');
-  if($statement4 == False) {
-    echo "Database is busy";
-    header("refresh: 0;");
-  }
+  $statement4 = $db->prepare('SELECT Com_Name, Sci_Name, Date, Time, Confidence, File_Name FROM detections ORDER BY Date DESC, Time DESC LIMIT 15');
+  ensure_db_ok($statement4);
   $result4 = $statement4->execute();
   if(!isset($_SESSION['images'])) {
     $_SESSION['images'] = [];
   }
   $iterations = 0;
-  $lines;
+  $image_provider = null;
+
   // hopefully one of the 5 most recent detections has an image that is valid, we'll use that one as the most recent detection until the newer ones get their images created
   while($mostrecent = $result4->fetchArray(SQLITE3_ASSOC)) {
     $comname = preg_replace('/ /', '_', $mostrecent['Com_Name']);
     $sciname = preg_replace('/ /', '_', $mostrecent['Sci_Name']);
+    $comnamegraph = str_replace("'", "\'", $mostrecent['Com_Name']);
     $comname = preg_replace('/\'/', '', $comname);
-    $filename = "/By_Date/".$mostrecent['Date']."/".$comname."/".$mostrecent['File_Name'];
-    $args = "&license=2%2C3%2C4%2C5%2C6%2C9&orientation=square,portrait";
-    $comnameprefix = "%20bird";
-    
-      // check to make sure the image actually exists, sometimes it takes a minute to be created\
-      if(file_exists($home."/BirdSongs/Extracted".$filename.".png")){
-          if($_GET['previous_detection_identifier'] == $filename) { die(); }
-          if($_GET['only_name'] == "true") { echo $comname.",".$filename;die(); }
+    $filename = "By_Date/".$mostrecent['Date']."/".$comname."/".$mostrecent['File_Name'];
 
-          $iterations++;
+    // check to make sure the image actually exists, sometimes it takes a minute to be created\
+    if(file_exists($home."/BirdSongs/Extracted/".$filename.".png")){
+      if($_GET['previous_detection_identifier'] == $filename) { die(); }
+      if($_GET['only_name'] == "true") { echo $comname.",".$filename;die(); }
 
-      if (!empty($config["FLICKR_API_KEY"])) {
+      $iterations++;
 
-        if(!empty($config["FLICKR_FILTER_EMAIL"])) {
-          if(!isset($_SESSION["FLICKR_FILTER_EMAIL"])) {
-            unset($_SESSION['images']);
-            $_SESSION['FLICKR_FILTER_EMAIL'] = json_decode(file_get_contents("https://www.flickr.com/services/rest/?method=flickr.people.findByEmail&api_key=".$config["FLICKR_API_KEY"]."&find_email=".$config["FLICKR_FILTER_EMAIL"]."&format=json&nojsoncallback=1"), true)["user"]["nsid"];
+      if (!empty($config["IMAGE_PROVIDER"])) {
+        if ($image_provider === null) {
+          if ($config["IMAGE_PROVIDER"] === 'FLICKR') {
+            $image_provider = new Flickr();
+          } else {
+            $image_provider = new Wikipedia();
           }
-          $args = "&user_id=".$_SESSION['FLICKR_FILTER_EMAIL'];
-          $comnameprefix = "";
-        } else {
-          if(isset($_SESSION["FLICKR_FILTER_EMAIL"])) {
-            unset($_SESSION["FLICKR_FILTER_EMAIL"]);
-            unset($_SESSION['images']);
+          if ($image_provider->is_reset()) {
+            $_SESSION['images'] = [];
           }
         }
-   
 
-        // if we already searched flickr for this species before, use the previous image rather than doing an unneccesary api call
+        // if we already searched for this species before, use the previous image rather than doing an unneccesary api call
         $key = array_search($comname, array_column($_SESSION['images'], 0));
-        if($key !== false) {
+        if ($key !== false) {
           $image = $_SESSION['images'][$key];
         } else {
-          // only open the file once per script execution
-          if(!isset($lines)) {
-            $lines = file($home."/BirdNET-Pi/model/labels_flickr.txt");
-          }
-          // convert sci name to English name
-          foreach($lines as $line){ 
-            if(strpos($line, $mostrecent['Sci_Name']) !== false){
-              $engname = trim(explode("_", $line)[1]);
-              break;
-            }
-          }
-
-         $flickrjson = json_decode(file_get_contents("https://www.flickr.com/services/rest/?method=flickr.photos.search&api_key=".$config["FLICKR_API_KEY"]."&text=".str_replace(" ", "%20", $engname).$comnameprefix."&sort=relevance".$args."&per_page=5&media=photos&format=json&nojsoncallback=1"), true)["photos"]["photo"][0];
-          $modaltext = "https://flickr.com/photos/".$flickrjson["owner"]."/".$flickrjson["id"];
-          $authorlink = "https://flickr.com/people/".$flickrjson["owner"];
-          $imageurl = 'https://farm' .$flickrjson["farm"]. '.static.flickr.com/' .$flickrjson["server"]. '/' .$flickrjson["id"]. '_'  .$flickrjson["secret"].  '.jpg';
-          array_push($_SESSION['images'], array($comname,$imageurl,$flickrjson["title"], $modaltext, $authorlink));
-          $image = $_SESSION['images'][count($_SESSION['images'])-1];
+          $cached_image = $image_provider->get_image($mostrecent['Sci_Name']);
+          array_push($_SESSION["images"], array($comname, $cached_image["image_url"], $cached_image["title"], $cached_image["photos_url"], $cached_image["author_url"], $cached_image["license_url"]));
+          $image = $_SESSION['images'][count($_SESSION['images']) - 1];
         }
       }
-
-      ?>
+    ?>
         <style>
         .fade-in {
           opacity: 1;
@@ -126,117 +118,121 @@ if(isset($_GET['ajax_detections']) && $_GET['ajax_detections'] == "true" && isse
           <tr>
             <td class="relative"><a target="_blank" href="index.php?filename=<?php echo $mostrecent['File_Name']; ?>"><img class="copyimage" title="Open in new tab" width="25" height="25" src="images/copy.png"></a>
             <div class="centered_image_container" style="margin-bottom: 0px !important;">
-              <?php if(!empty($config["FLICKR_API_KEY"]) && strlen($image[2]) > 0) { ?>
-                <img onclick='setModalText(<?php echo $iterations; ?>,"<?php echo urlencode($image[2]); ?>",  "<?php echo $image[3]; ?>", "<?php echo $image[4]; ?>", "<?php echo $image[1]; ?>")' src="<?php echo $image[1]; ?>" class="img1">
+              <?php if(!empty($config["IMAGE_PROVIDER"]) && strlen($image[2]) > 0) { ?>
+                <img onclick='setModalText(<?php echo $iterations; ?>,"<?php echo urlencode($image[2]); ?>", "<?php echo $image[3]; ?>", "<?php echo $image[4]; ?>", "<?php echo $image[1]; ?>", "<?php echo $image[5]; ?>")' src="<?php echo $image[1]; ?>" class="img1">
               <?php } ?>
               <form action="" method="GET">
                   <input type="hidden" name="view" value="Species Stats">
-                  <button type="submit" name="species" value="<?php echo $mostrecent['Com_Name'];?>"><?php echo $mostrecent['Com_Name'];?></button></br>
-                  <a href="https://wikipedia.org/wiki/<?php echo $sciname;?>" target="_blank"/><i><?php echo $mostrecent['Sci_Name'];?></i></a>
+                  <button type="submit" name="species" value="<?php echo $mostrecent['Com_Name'];?>"><?php echo $mostrecent['Com_Name'];?></button>
+                  <br>
+                  <i><?php echo $mostrecent['Sci_Name'];?></i>
+                  <a href="<?php $info_url = get_info_url($mostrecent['Sci_Name']); $url = $info_url['URL']; echo $url ?>" target="_blank">
+                  <img style="width: unset !important; display: inline; height: 1em; cursor: pointer;" title="Info" src="images/info.png" width="25"></a>
+                  <a href="https://wikipedia.org/wiki/<?php echo $sciname;?>" target="_blank"><img style="width: unset !important; display: inline; height: 1em; cursor: pointer;" title="Wikipedia" src="images/wiki.png" width="25"></a>
+                  <img style="width: unset !important;display: inline;height: 1em;cursor:pointer" title="View species stats" onclick="generateMiniGraph(this, '<?php echo $comnamegraph; ?>')" width=25 src="images/chart.svg">
                   <br>Confidence: <?php echo $percent = round((float)round($mostrecent['Confidence'],2) * 100 ) . '%';?><br></div><br>
-                  <video style="margin-top:10px" onplay='setLiveStreamVolume(0)' onended='setLiveStreamVolume(1)' onpause='setLiveStreamVolume(1)' controls poster="<?php echo $filename.".png";?>" preload="none" title="<?php echo $filename;?>"><source src="<?php echo $filename;?>"></video></td>
-              </form>
+                  <div class='custom-audio-player' data-audio-src="<?php echo $filename; ?>" data-image-src="<?php echo $filename.".png";?>"></div>
+                  </td></form>
           </tr>
         </table> <?php break;
       }
   }
   if($iterations == 0) {
-    echo "<h3>No Detections For Today.</h3>";
+    $statement2 = $db->prepare('SELECT COUNT(*) FROM detections WHERE Date == DATE(\'now\', \'localtime\')');
+    ensure_db_ok($statement2);
+    $result2 = $statement2->execute();
+    $todaycount = $result2->fetchArray(SQLITE3_ASSOC);
+    if($todaycount['COUNT(*)'] > 0) {
+      echo "<h3>Your system is currently processing a backlog of audio. This can take several hours before normal functionality of your BirdNET-Pi resumes.</h3>";
+    } else {
+      echo "<h3>No Detections For Today.</h3>";
+    }
   }
   die();
 }
 
 if(isset($_GET['ajax_left_chart']) && $_GET['ajax_left_chart'] == "true") {
 
-$statement = $db->prepare('SELECT COUNT(*) FROM detections');
-if($statement == False) {
-  echo "Database is busy";
-  header("refresh: 0;");
-}
-$result = $statement->execute();
-$totalcount = $result->fetchArray(SQLITE3_ASSOC);
-
-$statement2 = $db->prepare('SELECT COUNT(*) FROM detections WHERE Date == DATE(\'now\', \'localtime\')');
-if($statement2 == False) {
-  echo "Database is busy";
-  header("refresh: 0;");
-}
-$result2 = $statement2->execute();
-$todaycount = $result2->fetchArray(SQLITE3_ASSOC);
-
-$statement3 = $db->prepare('SELECT COUNT(*) FROM detections WHERE Date == Date(\'now\', \'localtime\') AND TIME >= TIME(\'now\', \'localtime\', \'-1 hour\')');
-if($statement3 == False) {
-  echo "Database is busy";
-  header("refresh: 0;");
-}
-$result3 = $statement3->execute();
-$hourcount = $result3->fetchArray(SQLITE3_ASSOC);
-
-$statement5 = $db->prepare('SELECT COUNT(DISTINCT(Com_Name)) FROM detections WHERE Date == Date(\'now\',\'localtime\')');
-if($statement5 == False) {
-  echo "Database is busy";
-  header("refresh: 0;");
-}
-$result5 = $statement5->execute();
-$speciestally = $result5->fetchArray(SQLITE3_ASSOC);
-
-$statement6 = $db->prepare('SELECT COUNT(DISTINCT(Com_Name)) FROM detections');
-if($statement6 == False) {
-  echo "Database is busy";
-  header("refresh: 0;");
-}
-$result6 = $statement6->execute();
-$totalspeciestally = $result6->fetchArray(SQLITE3_ASSOC);
-  
+  $chart_data = get_summary();
+  $_SESSION['chart_data'] = $chart_data;
 ?>
 <table>
   <tr>
     <th>Total</th>
-    <td><?php echo $totalcount['COUNT(*)'];?></td>
+    <td><?php echo $chart_data['totalcount'];?></td>
   </tr>
   <tr>
     <th>Today</th>
-    
-    <td><form action="" method="GET"><button type="submit" name="view" value="Today's Detections"><?php echo $todaycount['COUNT(*)'];?></button></td>
+    <td><form action="" method="GET"><button type="submit" name="view" value="Todays Detections"><?php echo $chart_data['todaycount'];?></button></td>
     </form>
   </tr>
   <tr>
     <th>Last Hour</th>
-    <td><?php echo $hourcount['COUNT(*)'];?></td>
+    <td><?php echo $chart_data['hourcount'];?></td>
   </tr>
   <tr>
     <th>Species Detected Today</th>
-    <td><form action="" method="GET"><input type="hidden" name="view" value="Recordings"><button type="submit" name="date" value="<?php echo date('Y-m-d');?>"><?php echo $speciestally['COUNT(DISTINCT(Com_Name))'];?></button></td>
+    <td><form action="" method="GET"><input type="hidden" name="view" value="Recordings"><button type="submit" name="date" value="<?php echo date('Y-m-d');?>"><?php echo $chart_data['speciestally'];?></button></td>
     </form>
   </tr>
   <tr>
     <th>Total Number of Species</th>
-    <td><form action="" method="GET"><button type="submit" name="view" value="Species Stats"><?php echo $totalspeciestally['COUNT(DISTINCT(Com_Name))'];?></button></td>
+    <td><form action="" method="GET"><button type="submit" name="view" value="Species Stats"><?php echo $chart_data['totalspeciestally'];?></button></td>
     </form>
   </tr>
 </table>
 <?php
-die();
+  die();
 }
+
+if(isset($_GET['ajax_center_chart']) && $_GET['ajax_center_chart'] == "true") {
+
+  // Retrieve the cached data from session without regenerating
+  $chart_data = $_SESSION['chart_data'];
 ?>
+  <table><tr>
+  <th>Total</th>
+  <th>Today</th>
+  <th>Last Hour</th>
+  <th>Species Total</th>
+  <th>Species Today</th>
+      </tr>
+      <tr>
+      <td><?php echo $chart_data['totalcount'];?></td>
+      <td><form action="" method="GET"><input type="hidden" name="view" value="Todays Detections"><?php echo $chart_data['todaycount'];?></td></form>
+      <td><?php echo $chart_data['hourcount'];?></td>
+      <td><form action="" method="GET"><button type="submit" name="view" value="Species Stats"><?php echo $chart_data['totalspeciestally'];?></button></td></form>
+      <td><form action="" method="GET"><input type="hidden" name="view" value="Recordings"><button type="submit" name="date" value="<?php echo date('Y-m-d');?>"><?php echo $chart_data['speciestally'];?></button></td></form>
+  </tr>
+  </table>
+
+<?php
+  die();
+}
+
+if (get_included_files()[0] === __FILE__) {
+  echo '<!DOCTYPE html>
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Overview</title>
-<style>
-body::-webkit-scrollbar {
-  display:none
+</head>';
 }
-</style>
-</head>
+?>
 <div class="overview">
-  <dialog id="attribution-dialog">
+  <dialog style="margin-top: 5px;max-height: 95vh;
+  overflow-y: auto;overscroll-behavior:contain" id="attribution-dialog">
     <h1 id="modalHeading"></h1>
     <p id="modalText"></p>
     <button onclick="hideDialog()">Close</button>
+    <button style="font-weight:bold;color:blue" onclick="if(confirm('Are you sure you want to blacklist this image?')) { blacklistImage(); }" <?php if($config["IMAGE_PROVIDER"] === 'WIKIPEDIA'){ echo 'hidden';} ?> >Blacklist this image</button>
   </dialog>
   <script src="static/dialog-polyfill.js"></script>
+  <script src="static/Chart.bundle.js"></script>
+  <script src="static/chartjs-plugin-trendline.min.js"></script>
   <script>
+  var last_photo_link;
   var dialog = document.querySelector('dialog');
   dialogPolyfill.registerDialog(dialog);
 
@@ -248,9 +244,38 @@ body::-webkit-scrollbar {
     document.getElementById('attribution-dialog').close();
   }
 
-  function setModalText(iter, title, text, authorlink, photolink) {
+  function blacklistImage() {
+    const match = last_photo_link.match(/\d+$/); // match one or more digits
+    const result = match ? match[0] : null; // extract the first match or return null if no match is found
+    console.log(last_photo_link)
+    const xhttp = new XMLHttpRequest();
+    xhttp.onload = function() {
+      if(this.responseText.length > 0) {
+       location.reload();
+      }
+    }
+    xhttp.open("GET", "overview.php?blacklistimage="+result, true);
+    xhttp.send();
+
+  }
+
+  function shorten(u) {
+    if (u.length < 48) {
+      return u;
+    }
+    uend = u.slice(u.length - 16);
+    ustart = u.substr(0, 32);
+    var shorter = ustart + '...' + uend;
+    return shorter;
+  }
+
+  function setModalText(iter, title, text, authorlink, photolink, licenseurl) {
+    let text_display = shorten(text);
+    let authorlink_display = shorten(authorlink);
+    let licenseurl_display = shorten(licenseurl);
     document.getElementById('modalHeading').innerHTML = "Photo: \""+decodeURIComponent(title.replaceAll("+"," "))+"\" Attribution";
-    document.getElementById('modalText').innerHTML = "<div><img style='border-radius:5px' src='"+photolink+"'></div><br><div>Image link: <a target='_blank' href="+text+">"+text+"</a><br>Author link: <a target='_blank' href="+authorlink+">"+authorlink+"</a></div>";
+    document.getElementById('modalText').innerHTML = "<div><img style='border-radius:5px;max-height: calc(100vh - 15rem);display: block;margin: 0 auto;' src='"+photolink+"'></div><br><div style='white-space:nowrap'>Image link: <a target='_blank' href="+text+">"+text_display+"</a><br>Author link: <a target='_blank' href="+authorlink+">"+authorlink_display+"</a><br>License URL: <a href="+licenseurl+" target='_blank'>"+licenseurl_display+"</a></div>";
+    last_photo_link = text;
     showDialog();
   }
   </script>  
@@ -258,6 +283,147 @@ body::-webkit-scrollbar {
 <div class="left-column">
 </div>
 <div class="right-column">
+<div class="center-column">
+</div>
+<?php
+$statement = $db->prepare("
+SELECT d_today.Com_Name, d_today.Sci_Name, d_today.Date, d_today.Time, d_today.Confidence, d_today.File_Name, 
+       MAX(d_today.Confidence) as MaxConfidence,
+       (SELECT MAX(Date) FROM detections d_prev WHERE d_prev.Sci_Name = d_today.Sci_Name AND d_prev.Date < DATE('now', 'localtime')) as LastSeenDate,
+       (SELECT COUNT(*) FROM detections d_occ WHERE d_occ.Sci_Name = d_today.Sci_Name AND d_occ.Date = DATE('now', 'localtime')) as OccurrenceCount
+FROM detections d_today
+WHERE d_today.Date = DATE('now', 'localtime')
+GROUP BY d_today.Sci_Name
+");
+ensure_db_ok($statement);
+$result = $statement->execute();
+
+$new_species = [];
+$rare_species = [];
+$rare_species_threshold = isset($config['RARE_SPECIES_THRESHOLD']) ? $config['RARE_SPECIES_THRESHOLD'] : 30;
+while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
+    $last_seen_date = $row['LastSeenDate'];
+    if ($last_seen_date === NULL) {
+        $new_species[] = $row;
+    } else {
+        $date1 = new DateTime($last_seen_date);
+        $date2 = new DateTime('now');
+        $interval = $date1->diff($date2);
+        $days_ago = $interval->days;
+        if ($days_ago > $rare_species_threshold) {
+            $row['DaysAgo'] = $days_ago;
+            $rare_species[] = $row;
+        }
+    }
+}
+
+if (!isset($_SESSION['images'])) {
+    $_SESSION['images'] = [];
+}
+
+function display_species($species_list, $title, $show_last_seen=false) {
+    global $config, $_SESSION, $image_provider;
+    $species_count = count($species_list);
+    if ($species_count > 0): ?>
+        <div class="<?php echo strtolower(str_replace(' ', '_', $title)); ?>">
+            <h2 style="text-align:center;"><?php echo $species_count; ?> <?php echo strtolower($title); ?> detected today!</h2>
+            <?php if ($species_count > 5): ?>
+                <table><tr><td style="text-align:center;"><form action="" method="GET"><input type="hidden" name="view" value="Recordings"><button type="submit" name="date" value="<?php echo date('Y-m-d');?>">Open Today's recordings page</button></form></td></tr></table>
+            <?php else: ?>
+                <table>
+                    <?php
+                    $iterations = 0;
+                    foreach($species_list as $todaytable):
+                        $iterations++;
+                        $comname = preg_replace('/ /', '_', $todaytable['Com_Name']);
+                        $comname = preg_replace('/\'/', '', $comname);
+                        $comnamegraph = str_replace("'", "\'", $todaytable['Com_Name']);
+                        $filename = "/By_Date/".$todaytable['Date']."/".$comname."/".$todaytable['File_Name'];
+                        $filename_formatted = $todaytable['Date']."/".$comname."/".$todaytable['File_Name'];
+                        $sciname = preg_replace('/ /', '_', $todaytable['Sci_Name']);
+                        $engname = get_com_en_name($todaytable['Sci_Name']);
+                        $engname_url = str_replace("'", '', str_replace(' ', '_', $engname));
+                        $info_url = get_info_url($todaytable['Sci_Name']);
+                        $url = $info_url['URL'];
+                        $url_title = $info_url['TITLE'];
+
+                        $image_url = ""; // Default empty image URL
+                        
+                        if (!empty($config["IMAGE_PROVIDER"])) {
+                          if ($image_provider === null) {
+                            if ($config["IMAGE_PROVIDER"] === 'FLICKR') {
+                              $image_provider = new Flickr();
+                            } else {
+                              $image_provider = new Wikipedia();
+                            }
+                            if ($image_provider->is_reset()) {
+                              $_SESSION['images'] = [];
+                            }
+                          }
+
+                            // Check if the image has been cached in the session
+                            $key = array_search($comname, array_column($_SESSION['images'], 0));
+                            if ($key !== false) {
+                                $image = $_SESSION['images'][$key];
+                            } else {
+                                // Retrieve the image from Flickr API and cache it
+                                $cached_image = $image_provider->get_image($todaytable['Sci_Name']);
+                                array_push($_SESSION["images"], array($comname, $cached_image["image_url"], $cached_image["title"], $cached_image["photos_url"], $cached_image["author_url"], $cached_image["license_url"]));
+                                $image = $_SESSION['images'][count($_SESSION['images']) - 1];
+                            }
+                            $image_url = $image[1] ?? ""; // Get the image URL if available
+                        }
+
+                        $last_seen_text = "";
+                        if ($show_last_seen && isset($todaytable['DaysAgo'])) {
+                            $days_ago = $todaytable['DaysAgo'];
+                            if ($days_ago > 30) {
+                                $months_ago = floor($days_ago / 30);
+                                $last_seen_text = "<br><i><span class='text left'>Last seen: </span>{$months_ago}mo ago</i>";
+                            } else {
+                                $last_seen_text = "<br><i><span class='text left'>Last seen: </span>{$days_ago}d ago</i>";
+                            }
+                        }
+
+                        $occurrence_text = "";
+                        if (isset($todaytable['OccurrenceCount']) && $todaytable['OccurrenceCount'] > 1) {
+                            $occurrence_text = " ({$todaytable['OccurrenceCount']}x)";
+                        }
+                    ?>
+                    <tr class="relative" id="<?php echo $iterations; ?>">
+                        <td><?php if (!empty($image_url)): ?>
+                          <img onclick='setModalText(<?php echo $iterations; ?>,"<?php echo urlencode($image[2]); ?>", "<?php echo $image[3]; ?>", "<?php echo $image[4]; ?>", "<?php echo $image[1]; ?>", "<?php echo $image[5]; ?>")' src="<?php echo $image_url; ?>" style="max-width: none; height: 50px; width: 50px; border-radius: 5px; cursor: pointer;" class="img1" title="Image from Flickr" />
+                        <?php endif; ?></td>
+                        <td id="recent_detection_middle_td">
+                            <div><form action="" method="GET">
+                                    <input type="hidden" name="view" value="Species Stats">
+                                    <button class="a2" type="submit" name="species" value="<?php echo $todaytable['Com_Name']; ?>"><?php echo $todaytable['Com_Name']; ?></button>
+                                    <br><i><?php echo $todaytable['Sci_Name']; ?><br>
+                                        <a href="<?php echo $url; ?>" target="_blank"><img style="height: 1em;cursor:pointer;float:unset;display:inline" title="<?php echo $url_title; ?>" src="images/info.png" width="25"></a>
+                                        <a href="https://wikipedia.org/wiki/<?php echo $sciname; ?>" target="_blank"><img style="height: 1em;cursor:pointer;float:unset;display:inline" title="Wikipedia" src="images/wiki.png" width="25"></a>
+                                        <?php if ($show_last_seen): ?>
+                                            <img style="height: 1em;cursor:pointer;float:unset;display:inline" title="View species stats" onclick="generateMiniGraph(this, '<?php echo $comnamegraph; ?>', 160)" width="25" src="images/chart.svg">
+                                        <?php endif; ?>
+                                        <a target="_blank" href="index.php?filename=<?php echo $todaytable['File_Name']; ?>"><img style="height: 1em;cursor:pointer;float:unset;display:inline" class="copyimage-mobile" title="Open in new tab" width="16" src="images/copy.png"></a>
+                                    </i>
+                            </form></div>
+                        </td>
+                        <td style="white-space: nowrap;"><?php
+                                echo '<span class="text left">Max confidence: </span>' . round($todaytable['Confidence'] * 100 ) . '%' . $occurrence_text;
+                                echo "<br><span class='text left'>First detection: </span>{$todaytable['Time']}";
+                                echo $last_seen_text;
+                        ?></td>
+                      </tr>
+                    <?php endforeach; ?>
+                </table>
+            <?php endif; ?>
+        </div>
+    <?php endif;
+}
+
+display_species($new_species, 'New Species');
+display_species($rare_species, 'Rare Species', true);
+?>
 <div class="chart">
 <?php
 $refresh = $config['RECORDING_LENGTH'];
@@ -267,7 +433,7 @@ if($dividedrefresh < 1) {
 }
 $time = time();
 if (file_exists('./Charts/'.$chart)) {
-  echo "<img id='chart' src=\"/Charts/$chart?nocache=$time\">";
+  echo "<img id='chart' src=\"Charts/$chart?nocache=$time\">";
 } 
 ?>
 </div>
@@ -281,12 +447,16 @@ if (file_exists('./Charts/'.$chart)) {
 <?php
 $refresh = $config['RECORDING_LENGTH'];
 $time = time();
-echo "<img id=\"spectrogramimage\" src=\"/spectrogram.png?nocache=$time\">";
+echo "<img id=\"spectrogramimage\" src=\"spectrogram.png?nocache=$time\">";
+
 ?>
 
-</div>
-</div>
+<div id="customimage"></div>
+<br>
 
+</div>
+</div>
+</div>
 <script>
 // we're passing a unique ID of the currently displayed detection to our script, which checks the database to see if the newest detection entry is that ID, or not. If the IDs don't match, it must mean we have a new detection and it's loaded onto the page
 function loadDetectionIfNewExists(previous_detection_identifier=undefined) {
@@ -300,6 +470,9 @@ function loadDetectionIfNewExists(previous_detection_identifier=undefined) {
       loadLeftChart();
       loadFiveMostRecentDetections();
       refreshTopTen();
+
+      // Now that new HTML is inserted, re-run player init:
+      initCustomAudioPlayers();
     }
   }
   xhttp.open("GET", "overview.php?ajax_detections=true&previous_detection_identifier="+previous_detection_identifier, true);
@@ -310,34 +483,55 @@ function loadLeftChart() {
   xhttp.onload = function() {
     if(this.responseText.length > 0 && !this.responseText.includes("Database is busy")) {
       document.getElementsByClassName("left-column")[0].innerHTML = this.responseText;
+      loadCenterChart();
     }
   }
   xhttp.open("GET", "overview.php?ajax_left_chart=true", true);
+  xhttp.send();
+}
+function loadCenterChart() {
+  const xhttp = new XMLHttpRequest();
+  xhttp.onload = function() {
+    if(this.responseText.length > 0 && !this.responseText.includes("Database is busy")) {
+      document.getElementsByClassName("center-column")[0].innerHTML = this.responseText;
+    }
+  }
+  xhttp.open("GET", "overview.php?ajax_center_chart=true", true);
   xhttp.send();
 }
 function refreshTopTen() {
   const xhttp = new XMLHttpRequest();
   xhttp.onload = function() {
   if(this.responseText.length > 0 && !this.responseText.includes("Database is busy") && !this.responseText.includes("No Detections") || previous_detection_identifier == undefined) {
-    document.getElementById("chart").src = "/Charts/"+this.responseText+"?nocache="+Date.now();
+    if (document.getElementById("chart")) {document.getElementById("chart").src = "Charts/"+this.responseText+"?nocache="+Date.now();}
   }
   }
   xhttp.open("GET", "overview.php?fetch_chart_string=true", true);
   xhttp.send();
 }
-window.setInterval(function(){
-  var videoelement = document.getElementsByTagName("video")[0];
-  if(typeof videoelement !== "undefined") {
-    // don't refresh the detection if the user is playing the previous one's audio, wait until they're finished
-    if(!!(videoelement.currentTime > 0 && !videoelement.paused && !videoelement.ended && videoelement.readyState > 2) == false) {
-      loadDetectionIfNewExists(videoelement.title);
+function refreshDetection() {
+  if (!document.hidden) {
+    const audioPlayers = document.querySelectorAll(".custom-audio-player");
+    // If no custom-audio-player elements are found, refresh
+    if (audioPlayers.length === 0) {
+      loadDetectionIfNewExists();
+      return;
     }
-  } else{
-    // image or audio didn't load for some reason, force a refresh in 5 seconds
-    loadDetectionIfNewExists();
+    // Check if any custom audio player is currently playing
+    let isPlaying = false;
+    audioPlayers.forEach((player) => {
+      const audioEl = player.querySelector("audio");
+      if (audioEl && audioEl.currentTime > 0 && !audioEl.paused && !audioEl.ended && audioEl.readyState > 2) {
+        isPlaying = true;
+      }
+    });
+    // If none are playing, refresh detections
+    if (!isPlaying) {
+      const currentIdentifier = audioPlayers[0]?.dataset.audioSrc || undefined;
+      loadDetectionIfNewExists(currentIdentifier);
+    }
   }
-}, <?php echo intval($dividedrefresh); ?>*1000);
-
+}
 function loadFiveMostRecentDetections() {
   const xhttp = new XMLHttpRequest();
   xhttp.onload = function() {
@@ -352,13 +546,72 @@ function loadFiveMostRecentDetections() {
   }
   xhttp.send();
 }
+function refreshCustomImage(){
+  // Find the customimage element
+  var customimage = document.getElementById("customimage");
+
+  function updateCustomImage() {
+    var xhr = new XMLHttpRequest();
+    xhr.open("GET", "overview.php?custom_image=true", true);
+    xhr.onload = function() {
+      customimage.innerHTML = xhr.responseText;
+    }
+    xhr.send();
+  }
+  updateCustomImage();
+}
+function startAutoRefresh() {
+    i_fn1 = window.setInterval(function(){
+                    document.getElementById("spectrogramimage").src = "spectrogram.png?nocache="+Date.now();
+                    }, <?php echo $refresh; ?>*1000);
+    i_fn2 = window.setInterval(refreshDetection, <?php echo intval($dividedrefresh); ?>*1000);
+    if (customImage) i_fn3 = window.setInterval(refreshCustomImage, 1000);
+}
+<?php if(isset($config["CUSTOM_IMAGE"]) && strlen($config["CUSTOM_IMAGE"]) > 2){?>
+customImage = true;
+<?php } else { ?>
+customImage = false;
+<?php } ?>
 window.addEventListener("load", function(){
   loadDetectionIfNewExists();
 });
-
-// every $refresh seconds, this loop will run and refresh the spectrogram image
-window.setInterval(function(){
-  document.getElementById("spectrogramimage").src = "/spectrogram.png?nocache="+Date.now();
-}, <?php echo $refresh; ?>*1000);
+document.addEventListener("visibilitychange", function() {
+  console.log(document.visibilityState);
+  console.log(document.hidden);
+  if (document.hidden) {
+    clearInterval(i_fn1);
+    clearInterval(i_fn2);
+    if (customImage) clearInterval(i_fn3);
+  } else {
+    loadDetectionIfNewExists();
+    startAutoRefresh();
+  }
+});
+startAutoRefresh();
 </script>
 
+<style>
+  .tooltip {
+  background-color: white;
+  border: 1px solid #ccc;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+  padding: 10px;
+  transition: opacity 0.2s ease-in-out;
+}
+</style>
+<script src="static/custom-audio-player.js"></script>
+<script src="static/generateMiniGraph.js"></script>
+<script>
+// Listen for the scroll event on the window object
+window.addEventListener('scroll', function() {
+  // Get all chart elements
+  var charts = document.querySelectorAll('.chartdiv');
+  
+  // Loop through all chart elements and remove them
+  charts.forEach(function(chart) {
+    chart.parentNode.removeChild(chart);
+    window.chartWindow = undefined;
+  });
+});
+
+</script>

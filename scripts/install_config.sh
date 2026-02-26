@@ -7,6 +7,17 @@ trap 'exit 1' SIGINT SIGHUP
 echo "Beginning $0"
 birdnet_conf=$my_dir/birdnet.conf
 
+# Retrieve latitude and longitude from web
+json=$(curl -s4 http://ip-api.com/json || true)
+if [ -n "$json" ] && [ "$(echo "$json" | jq -r .status)" = "success" ]; then
+  LATITUDE=$(echo "$json" | jq .lat)
+  LONGITUDE=$(echo "$json" | jq .lon)
+else
+  echo -e "\033[33mCouldn't set latitude and longitude automatically, you will need to do this manually from the web interface by navigating to Tools -> Settings -> Location.\033[0m"
+  LATITUDE=0.0000
+  LONGITUDE=0.0000
+fi
+
 install_config() {
   cat << EOF > $birdnet_conf
 ################################################################################
@@ -24,15 +35,17 @@ SITE_NAME="$HOSTNAME"
 ## Please only go to 4 decimal places. Example:43.3984
 
 
-LATITUDE=$(curl -s4 ifconfig.co/json | jq .latitude)
-LONGITUDE=$(curl -s4 ifconfig.co/json | jq .longitude)
+LATITUDE=$LATITUDE
+LONGITUDE=$LONGITUDE
 
 #--------------------------------- Model --------------------------------------#
 #_____________The variable below configures which BirdNET model is_____________#
 #______________________used for detecting bird audio.__________________________#
+#_It's recommended that you only change these values through the web interface.#
 
-MODEL=BirdNET_6K_GLOBAL_MODEL
+MODEL=BirdNET_GLOBAL_6K_V2.4_Model_FP16
 SF_THRESH=0.03
+DATA_MODEL_VERSION=1
 
 #---------------------  BirdWeather Station Information -----------------------#
 #_____________The variable below can be set to have your BirdNET-Pi____________#
@@ -81,15 +94,23 @@ BIRDNETPI_URL=
 
 RTSP_STREAM=
 
+## RTSP_STREAM_TO_LIVESTREAM is the index, so 0 means the first stream
+RTSP_STREAM_TO_LIVESTREAM="0"
+
 #-----------------------  Apprise Miscellanous Configuration -------------------#
 
 APPRISE_NOTIFICATION_TITLE="New BirdNET-Pi Detection"
-APPRISE_NOTIFICATION_BODY="A \$sciname \$comname was just detected with a confidence of \$confidence"
 APPRISE_NOTIFY_EACH_DETECTION=0
 APPRISE_NOTIFY_NEW_SPECIES=0
 APPRISE_WEEKLY_REPORT=1
 APPRISE_NOTIFY_NEW_SPECIES_EACH_DAY=0
 APPRISE_MINIMUM_SECONDS_BETWEEN_NOTIFICATIONS_PER_SPECIES=0
+APPRISE_ONLY_NOTIFY_SPECIES_NAMES=""
+APPRISE_ONLY_NOTIFY_SPECIES_NAMES_2=""
+
+#----------------------  Image Provider Configuration ------------------------#
+## WIKIPEDIA or FLICKR (Flickr requires API key)
+IMAGE_PROVIDER=WIKIPEDIA
 
 #----------------------  Flickr Images API Configuration -----------------------#
 ## If FLICKR_API_KEY is set, the web interface will try and display bird images 
@@ -99,9 +120,43 @@ APPRISE_MINIMUM_SECONDS_BETWEEN_NOTIFICATIONS_PER_SPECIES=0
 FLICKR_API_KEY=
 FLICKR_FILTER_EMAIL=
 
+#----------------------  Site to pull info from Images  ------------------------#
+## ALLABOUTBIRDS or EBIRD
+## default ALLABOUTBIRDS, EBIRD better for eurasian locations
+
+INFO_SITE="ALLABOUTBIRDS"
+
+#-------------------------------  Color scheme  --------------------------------#
+## light or dark
+## default light
+
+COLOR_SCHEME="light"
+
+#------------------------------  Disk Management  ------------------------------#
+## FULL_DISK can be set to configure how the system reacts to a full disk
+## purge = Remove the oldest day's worth of recordings
+## keep = Keep all data and 'stop_core_services.sh'
+
+FULL_DISK=purge
+
+## PURGE_THRESHOLD can be set to configure at what disk full percentage the
+## purge operations are triggered.
+PURGE_THRESHOLD=95
+
+## Maximum amount of files to keep for a given specie (0 = keep all)
+## Files from the last 7 days, and files protected from purge, are not taken into
+## account in this number
+
+MAX_FILES_SPECIES=0
+
 ################################################################################
 #--------------------------------  Defaults  ----------------------------------#
 ################################################################################
+
+## BIRDNET_USER is for scripts to easily find where BirdNET-Pi is installed
+## DO NOT EDIT!
+
+BIRDNET_USER=$USER
 
 ## RECS_DIR is the location birdnet_analysis.service will look for the data-set
 ## it needs to analyze. Be sure this directory is readable and writable for
@@ -152,6 +207,9 @@ FREQSHIFT_HI=6000
 ## FREQSHIFT_LO
 FREQSHIFT_LO=3000
 
+## FREQSHIFT_RECONNECT_DELAY
+FREQSHIFT_RECONNECT_DELAY=4000
+
 ## If the tool is sox, you have to define the pitch shift (amount of 100ths of semintone)
 ## FREQSHIFT_PITCH
 FREQSHIFT_PITCH=-1500
@@ -160,12 +218,6 @@ FREQSHIFT_PITCH=-1500
 ## sound card supports.
 
 CHANNELS=2
-
-## FULL_DISK can be set to configure how the system reacts to a full disk
-## purge = Remove the oldest day's worth of recordings
-## keep = Keep all data and 'stop_core_services.sh'
-
-FULL_DISK=purge
 
 ## PRIVACY_THRESHOLD can be set to enable sensitivity to Human sounds. This
 ## setting is an effort to introduce privacy into the data collection.
@@ -213,10 +265,34 @@ HEARTBEAT_URL=
 
 SILENCE_UPDATE_INDICATOR=0
 
+## AUTOMATIC_UPDATE is for specifying that the installation is automatically
+## updated from the Github repo. The update time is by default every Sunday at 3:00 AM 
+## but can be adjusted using crontab.
+
+AUTOMATIC_UPDATE=0
+
+## RAW_SPECTROGRAM is for removing the axes and labels of the spectrograms
+## that are generated by Sox for each detection for a cleaner appearance.
+
+RAW_SPECTROGRAM=0
+
+## CUSTOM_IMAGE and CUSTOM_IMAGE_TITLE allow you to show a custom image on the
+## Overview page of your BirdNET-Pi. This can be used to show a dynamically 
+## updating picture of your garden, for example.
+
+CUSTOM_IMAGE=
+CUSTOM_IMAGE_TITLE=""
+
+## RARE_SPECIES_THRESHOLD defines after how many days a species is considered as rare and highlighted on overview page
+RARE_SPECIES_THRESHOLD=30
+
 ## These are just for debugging
 LAST_RUN=
 THIS_RUN=
 IDFILE=$HOME/BirdNET-Pi/IdentifiedSoFar.txt
+LogLevel_BirdnetRecordingService="error"
+LogLevel_LiveAudioStreamService="error"
+LogLevel_SpectrogramViewerService="error"
 EOF
 }
 
@@ -228,3 +304,7 @@ chmod g+w ${birdnet_conf}
 [ -d /etc/birdnet ] || sudo mkdir /etc/birdnet
 sudo ln -sf $birdnet_conf /etc/birdnet/birdnet.conf
 grep -ve '^#' -e '^$' /etc/birdnet/birdnet.conf > $my_dir/firstrun.ini
+
+source /etc/birdnet/birdnet.conf
+echo 'A $comname ($sciname)  was just detected with a confidence of $confidence ($reason)' | sudo -u $BIRDNET_USER tee "$HOME/BirdNET-Pi/body.txt"
+chmod g+w "$HOME/BirdNET-Pi/body.txt"

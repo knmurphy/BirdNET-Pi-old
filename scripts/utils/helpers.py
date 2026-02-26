@@ -43,16 +43,13 @@ class PHPConfigParser(ConfigParser):
 def _load_settings(settings_path='/etc/birdnet/birdnet.conf', force_reload=False):
     global _settings
     if _settings is None or force_reload:
-        try:
-            with open(settings_path) as f:
-                parser = PHPConfigParser(interpolation=None)
-                # preserve case
-                parser.optionxform = lambda option: option
-                lines = chain(("[top]",), f)
-                parser.read_file(lines)
-                _settings = parser['top']
-        except FileNotFoundError as exc:
-            raise RuntimeError(f"Settings file not found: {settings_path}") from exc
+        with open(settings_path) as f:
+            parser = PHPConfigParser(interpolation=None)
+            # preserve case
+            parser.optionxform = lambda option: option
+            lines = chain(("[top]",), f)
+            parser.read_file(lines)
+            _settings = parser['top']
     return _settings
 
 

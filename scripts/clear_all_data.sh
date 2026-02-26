@@ -5,13 +5,12 @@
 # so far.
 set -x
 source /etc/birdnet/birdnet.conf
-USER=$(awk -F: '/1000/ {print $1}' /etc/passwd)
-HOME=$(awk -F: '/1000/ {print $6}' /etc/passwd)
+USER=${BIRDNET_USER}
+HOME=/home/${BIRDNET_USER}
 my_dir=${HOME}/BirdNET-Pi/scripts
 echo "Stopping services"
 sudo systemctl stop birdnet_recording.service
 sudo systemctl stop birdnet_analysis.service
-sudo systemctl stop birdnet_server.service
 echo "Removing all data . . . "
 sudo rm -drf "${RECS_DIR}"
 sudo rm -f "${IDFILE}"
@@ -24,7 +23,9 @@ echo "Re-creating necessary directories"
 [ -d ${PROCESSED} ] || sudo -u ${USER} mkdir -p ${PROCESSED}
 
 sudo -u ${USER} ln -fs $(dirname $my_dir)/exclude_species_list.txt $my_dir
+sudo -u ${USER} ln -fs $(dirname $my_dir)/confirmed_species_list.txt $my_dir
 sudo -u ${USER} ln -fs $(dirname $my_dir)/include_species_list.txt $my_dir
+sudo -u ${USER} ln -fs $(dirname $my_dir)/whitelist_species_list.txt $my_dir
 sudo -u ${USER} ln -fs $(dirname $my_dir)/homepage/* ${EXTRACTED}
 sudo -u ${USER} ln -fs $(dirname $my_dir)/model/labels.txt ${my_dir}
 sudo -u ${USER} ln -fs $my_dir ${EXTRACTED}

@@ -1,31 +1,36 @@
 <?php
-  if (file_exists('./scripts/thisrun.txt')) {
-    $config = parse_ini_file('./scripts/thisrun.txt');
-  } elseif (file_exists('./scripts/firstrun.ini')) {
-    $config = parse_ini_file('./scripts/firstrun.ini');
-  }
-  if($config["SITE_NAME"] == "") {
-    $site_name = "BirdNET-Pi";
-  } else {
-    $site_name = $config['SITE_NAME'];
-  }
+
+$requestUri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+
+if (strpos($requestUri, '/api/v1/') === 0) {
+  include_once 'scripts/api.php';
+  die();
+}
+
+/* Prevent XSS input */
+$_GET   = filter_input_array(INPUT_GET, FILTER_SANITIZE_STRING);
+$_POST  = filter_input_array(INPUT_POST, FILTER_SANITIZE_STRING);
+require_once 'scripts/common.php';
+$config = get_config();
+$site_name = get_sitename();
+$color_scheme = get_color_scheme();
+set_timezone();
+
 ?>
+<!DOCTYPE html>
+<html lang="en">
 <title><?php echo $site_name; ?></title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<style>
-body::-webkit-scrollbar {
-  display:none
-}
-</style>
-<link rel="stylesheet" href="style.css?v=1.20.23">
+<link id="iconLink" rel="shortcut icon" sizes=85x85 href="images/bird.png" />
+<link rel="stylesheet" href="<?php echo $color_scheme . '?v=' . date('n.d.y', filemtime($color_scheme)); ?>">
 <link rel="stylesheet" type="text/css" href="static/dialog-polyfill.css" />
 <body>
 <div class="banner">
   <div class="logo">
 <?php if(isset($_GET['logo'])) {
-echo "<a href=\"https://github.com/mcguirepr89/BirdNET-Pi.git\" target=\"_blank\"><img style=\"width:60;height:60;\" src=\"images/bird.png\"></a>";
+echo "<a href=\"https://github.com/Nachtzuster/BirdNET-Pi.git\" target=\"_blank\"><img style=\"width:60;height:60;\" src=\"images/bird.png\"></a>";
 } else {
-echo "<a href=\"https://github.com/mcguirepr89/BirdNET-Pi.git\" target=\"_blank\"><img src=\"images/bird.png\"></a>";
+echo "<a href=\"https://github.com/Nachtzuster/BirdNET-Pi.git\" target=\"_blank\"><img src=\"images/bird.png\"></a>";
 }?>
   </div>
 
@@ -33,36 +38,15 @@ echo "<a href=\"https://github.com/mcguirepr89/BirdNET-Pi.git\" target=\"_blank\
   <div class="stream">
 <?php
 if(isset($_GET['stream'])){
-  if (file_exists('./scripts/thisrun.txt')) {
-    $config = parse_ini_file('./scripts/thisrun.txt');
-  } elseif (file_exists('./scripts/firstrun.ini')) {
-    $config = parse_ini_file('./scripts/firstrun.ini');
-  }
-  $caddypwd = $config['CADDY_PWD'];
-  if (!isset($_SERVER['PHP_AUTH_USER'])) {
-    header('WWW-Authenticate: Basic realm="My Realm"');
-    header('HTTP/1.0 401 Unauthorized');
-    echo 'You cannot listen to the live audio stream';
-    exit;
-  } else {
-    $submittedpwd = $_SERVER['PHP_AUTH_PW'];
-    $submitteduser = $_SERVER['PHP_AUTH_USER'];
-    if($submittedpwd == $caddypwd && $submitteduser == 'birdnet'){
+  ensure_authenticated('You cannot listen to the live audio stream');
       echo "
   <audio controls autoplay><source src=\"/stream\"></audio>
   </div>
   <h1><a href=\"/\"><img class=\"topimage\" src=\"images/bnp.png\"></a></h1>
   </div><div class=\"centered\"><h3>$site_name</h3></div>";
-    } else {
-      header('WWW-Authenticate: Basic realm="My Realm"');
-      header('HTTP/1.0 401 Unauthorized');
-      echo 'You cannot listen to the live audio stream';
-      exit;
-    }
-  }
 } else {
     echo "
-  <form action=\"\" method=\"GET\">
+  <form action=\"index.php\" method=\"GET\">
     <button type=\"submit\" name=\"stream\" value=\"play\">Live Audio</button>
   </form>
   </div>
@@ -72,11 +56,8 @@ if(isset($_GET['stream'])){
 if(isset($_GET['filename'])) {
   $filename = $_GET['filename'];
 echo "
-<iframe src=\"/views.php?view=Recordings&filename=$filename\"></iframe>
-</div>";
+<iframe src=\"views.php?view=Recordings&filename=$filename\"></iframe>";
 } else {
   echo "
-<iframe src=\"/views.php\"></iframe>
-</div>";
+<iframe src=\"views.php\"></iframe>";
 }
-

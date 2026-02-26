@@ -8,7 +8,7 @@ fi
 if [ "$(uname -m)" != "aarch64" ] && [ "$(uname -m)" != "x86_64" ];then
   echo "BirdNET-Pi requires a 64-bit OS.
 It looks like your operating system is using $(uname -m),
-but needs to be a 64-bit architecture (aarch64 or x86_64)."
+but would need to be aarch64."
   exit 1
 fi
 

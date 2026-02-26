@@ -1,156 +1,275 @@
 #!/usr/bin/env bash
+set -x
 # Update BirdNET-Pi
-source /etc/birdnet/birdnet.conf
 trap 'exit 1' SIGINT SIGHUP
-USER=$(awk -F: '/1000/ {print $1}' /etc/passwd)
-HOME=$(awk -F: '/1000/ {print $6}' /etc/passwd)
+source /etc/birdnet/birdnet.conf
+if [ -n "${BIRDNET_USER}" ]; then
+  echo "BIRDNET_USER: ${BIRDNET_USER}"
+  USER=${BIRDNET_USER}
+  HOME=/home/${BIRDNET_USER}
+else
+  echo "WARNING: no BIRDNET_USER found"
+  USER=$(awk -F: '/1000/ {print $1}' /etc/passwd)
+  HOME=$(awk -F: '/1000/ {print $6}' /etc/passwd)
+fi
 my_dir=$HOME/BirdNET-Pi/scripts
+source "$my_dir/install_helpers.sh"
 
 # Sets proper permissions and ownership
-sudo -E chown -R $USER:$USER $HOME/*
-sudo chmod -R g+wr $HOME/*
+find $HOME/Bird* -type f ! -perm -g+wr -exec chmod g+wr {} + 2>/dev/null
+find $HOME/Bird* -not -user $USER -execdir sudo -E chown $USER:$USER {} \+
+chmod 666 ~/BirdNET-Pi/scripts/*.txt
+chmod 666 ~/BirdNET-Pi/*.txt
+find $HOME/BirdNET-Pi -path "$HOME/BirdNET-Pi/birdnet" -prune -o -type f ! -perm /o=w -exec chmod a+w {} \;
+chmod g+r $HOME
 
-# Create blank sitename as it's optional. First time install will use $HOSTNAME.
-if ! grep SITE_NAME /etc/birdnet/birdnet.conf &>/dev/null;then
-  sudo -u$USER echo "SITE_NAME=\"\"" >> /etc/birdnet/birdnet.conf
-fi
+# remove world-writable perms
+chmod -R o-w ~/BirdNET-Pi/templates/*
 
-if ! grep PRIVACY_THRESHOLD /etc/birdnet/birdnet.conf &>/dev/null;then
-  sudo -u$USER echo "PRIVACY_THRESHOLD=0" >> /etc/birdnet/birdnet.conf
-  git -C $HOME/BirdNET-Pi rm $my_dir/privacy_server.py
-fi
-if [ -f $my_dir/privacy_server ] || [ -L /usr/local/bin/privacy_server.py ];then
-  rm -f $my_dir/privacy_server.py
-  rm -f /usr/local/bin/privacy_server.py
-fi
+APT_UPDATED=0
+PIP_UPDATED=0
 
-# Adds python virtual-env to the python systemd services
-if ! grep 'BirdNET-Pi/birdnet/' $HOME/BirdNET-Pi/templates/birdnet_server.service &>/dev/null || ! grep 'BirdNET-Pi/birdnet' $HOME/BirdNET-Pi/templates/chart_viewer.service &>/dev/null;then
-  sudo -E sed -i "s|ExecStart=.*|ExecStart=$HOME/BirdNET-Pi/birdnet/bin/python3 /usr/local/bin/server.py|" ~/BirdNET-Pi/templates/birdnet_server.service
-  sudo -E sed -i "s|ExecStart=.*|ExecStart=$HOME/BirdNET-Pi/birdnet/bin/python3 /usr/local/bin/daily_plot.py|" ~/BirdNET-Pi/templates/chart_viewer.service
-  sudo systemctl daemon-reload && restart_services.sh
-fi
+# helpers
+sudo_with_user () {
+  sudo -u $USER "$@"
+}
 
-if grep privacy ~/BirdNET-Pi/templates/birdnet_server.service &>/dev/null;then
-  sudo -E sed -i 's/privacy_server.py/server.py/g' \
-    ~/BirdNET-Pi/templates/birdnet_server.service
-  sudo systemctl daemon-reload
-  restart_services.sh
-fi
-if ! grep APPRISE_NOTIFICATION_TITLE /etc/birdnet/birdnet.conf &>/dev/null;then
-  sudo -u$USER echo "APPRISE_NOTIFICATION_TITLE=\"New BirdNET-Pi Detection\"" >> /etc/birdnet/birdnet.conf
-fi
-if ! grep APPRISE_NOTIFICATION_BODY /etc/birdnet/birdnet.conf &>/dev/null;then
-  sudo -u$USER echo "APPRISE_NOTIFICATION_BODY=\"A \$sciname \$comname was just detected with a confidence of \$confidence\"" >> /etc/birdnet/birdnet.conf
-fi
-if ! grep APPRISE_NOTIFY_EACH_DETECTION /etc/birdnet/birdnet.conf &>/dev/null;then
-  sudo -u$USER echo "APPRISE_NOTIFY_EACH_DETECTION=0 " >> /etc/birdnet/birdnet.conf
-fi
-if ! grep APPRISE_NOTIFY_NEW_SPECIES /etc/birdnet/birdnet.conf &>/dev/null;then
-  sudo -u$USER echo "APPRISE_NOTIFY_NEW_SPECIES=0 " >> /etc/birdnet/birdnet.conf
-fi
-if ! grep APPRISE_NOTIFY_NEW_SPECIES_EACH_DAY /etc/birdnet/birdnet.conf &>/dev/null;then
-  sudo -u$USER echo "APPRISE_NOTIFY_NEW_SPECIES_EACH_DAY=0 " >> /etc/birdnet/birdnet.conf
-fi
-if ! grep APPRISE_MINIMUM_SECONDS_BETWEEN_NOTIFICATIONS_PER_SPECIES /etc/birdnet/birdnet.conf &>/dev/null;then
-  sudo -u$USER echo "APPRISE_MINIMUM_SECONDS_BETWEEN_NOTIFICATIONS_PER_SPECIES=0 " >> /etc/birdnet/birdnet.conf
-fi
+ensure_apt_updated () {
+  [[ $APT_UPDATED != "UPDATED" ]] && apt-get update && APT_UPDATED="UPDATED"
+}
 
-# If the config does not contain the DATABASE_LANG setting, we'll want to add it.
-# Defaults to not-selected, which config.php will know to render as a language option.
-# The user can then select a language in the web interface and update with that.
-if ! grep DATABASE_LANG /etc/birdnet/birdnet.conf &>/dev/null;then
-  sudo -u$USER echo "DATABASE_LANG=not-selected" >> /etc/birdnet/birdnet.conf
+ensure_pip_updated () {
+  [[ $PIP_UPDATED != "UPDATED" ]] && sudo_with_user $HOME/BirdNET-Pi/birdnet/bin/pip3 install -U pip && PIP_UPDATED="UPDATED"
+}
+
+remove_unit_file() {
+  # remove_unit_file pushed_notifications.service $HOME/BirdNET-Pi/templates/pushed_notifications.service
+  if systemctl list-unit-files "${1}" &>/dev/null;then
+    systemctl disable --now "${1}"
+    rm -f "/usr/lib/systemd/system/${1}"
+    rm "$HOME/BirdNET-Pi/templates/${1}"
+    if [ $# == 2 ]; then
+      rm -f "${2}"
+    fi
+  fi
+}
+
+ensure_python_package() {
+  # ensure_python_package pytest pytest==7.1.2
+  pytest_installation_status=$(~/BirdNET-Pi/birdnet/bin/python3 -c 'import pkgutil; import sys; print("installed" if pkgutil.find_loader(sys.argv[1]) else "not installed")' "$1")
+  if [[ "$pytest_installation_status" = "not installed" ]];then
+    ensure_pip_updated
+    sudo_with_user $HOME/BirdNET-Pi/birdnet/bin/pip3 install "$2"
+  fi
+}
+
+# sed -i on /etc/birdnet/birdnet.conf overwites the symbolic link - restore the link
+if ! [ -L /etc/birdnet/birdnet.conf ] ; then
+  sudo_with_user cp -f /etc/birdnet/birdnet.conf $HOME/BirdNET-Pi/
+  ln -fs  $HOME/BirdNET-Pi/birdnet.conf /etc/birdnet/birdnet.conf
 fi
 
-apprise_installation_status=$(~/BirdNET-Pi/birdnet/bin/python3 -c 'import pkgutil; print("installed" if pkgutil.find_loader("apprise") else "not installed")')
-if [[ "$apprise_installation_status" = "not installed" ]];then
-  $HOME/BirdNET-Pi/birdnet/bin/pip3 install -U pip
-  $HOME/BirdNET-Pi/birdnet/bin/pip3 install apprise
-fi
-[ -f $HOME/BirdNET-Pi/apprise.txt ] || sudo -E -ucaddy touch $HOME/BirdNET-Pi/apprise.txt
-if ! which lsof &>/dev/null;then
-  sudo apt update && sudo apt -y install lsof
-fi
-if ! grep RTSP_STREAM /etc/birdnet/birdnet.conf &>/dev/null;then
-  sudo -u$USER echo "RTSP_STREAM=" >> /etc/birdnet/birdnet.conf
-fi
-if grep bash $HOME/BirdNET-Pi/templates/web_terminal.service &>/dev/null;then
-  sudo sed -i '/User/d;s/bash/login/g' $HOME/BirdNET-Pi/templates/web_terminal.service
-  sudo systemctl daemon-reload
-  sudo systemctl restart web_terminal.service
-fi
-[ -L ~/BirdSongs/Extracted/static ] || ln -sf ~/BirdNET-Pi/homepage/static ~/BirdSongs/Extracted
-if ! grep FLICKR_API_KEY /etc/birdnet/birdnet.conf &>/dev/null;then
-  sudo -u$USER echo "FLICKR_API_KEY=" >> /etc/birdnet/birdnet.conf
-fi
-if systemctl list-unit-files pushed_notifications.service &>/dev/null;then
-  sudo systemctl disable --now pushed_notifications.service
-  sudo rm -f /usr/lib/systemd/system/pushed_notifications.service
-  sudo rm $HOME/BirdNET-Pi/templates/pushed_notifications.service
+# update snippets below
+SRC="APPRISE_NOTIFICATION_BODY='(.*)'$"
+DST='APPRISE_NOTIFICATION_BODY="\1"'
+sed -i --follow-symlinks -E "s/$SRC/$DST/" /etc/birdnet/birdnet.conf
+
+if ! grep -E '^DATA_MODEL_VERSION=' /etc/birdnet/birdnet.conf &>/dev/null;then
+    echo "DATA_MODEL_VERSION=1" >> /etc/birdnet/birdnet.conf
 fi
 
-if [ ! -f $HOME/BirdNET-Pi/model/labels.txt ];then
-  [ $DATABASE_LANG == 'not-selected' ] && DATABASE_LANG=en
-  $my_dir/install_language_label.sh -l $DATABASE_LANG \
-  && logger "[$0] Installed new language label file for '$DATABASE_LANG'";
+if ! grep -E '^BIRDNET_USER=' /etc/birdnet/birdnet.conf &>/dev/null;then
+  echo "## BIRDNET_USER is for scripts to easily find where BirdNET-Pi is installed" >> /etc/birdnet/birdnet.conf
+  echo "## DO NOT EDIT!" >> /etc/birdnet/birdnet.conf
+  echo "BIRDNET_USER=$(awk -F: '/1000/ {print $1}' /etc/passwd)" >> /etc/birdnet/birdnet.conf
 fi
 
-if ! grep FLICKR_FILTER_EMAIL /etc/birdnet/birdnet.conf &>/dev/null;then
-  sudo -u$USER echo "FLICKR_FILTER_EMAIL=" >> /etc/birdnet/birdnet.conf
+if ! grep -E '^RTSP_STREAM_TO_LIVESTREAM=' /etc/birdnet/birdnet.conf &>/dev/null;then
+  echo "RTSP_STREAM_TO_LIVESTREAM=\"0\"" >> /etc/birdnet/birdnet.conf
 fi
 
-pytest_installation_status=$(~/BirdNET-Pi/birdnet/bin/python3 -c 'import pkgutil; print("installed" if pkgutil.find_loader("pytest") else "not installed")')
-if [[ "$pytest_installation_status" = "not installed" ]];then
-  $HOME/BirdNET-Pi/birdnet/bin/pip3 install -U pip
-  $HOME/BirdNET-Pi/birdnet/bin/pip3 install pytest==7.1.2 pytest-mock==3.7.0
+SRC='^APPRISE_NOTIFICATION_BODY="A \$comname \(\$sciname\)  was just detected with a confidence of \$confidence"$'
+DST='APPRISE_NOTIFICATION_BODY="A \$comname (\$sciname)  was just detected with a confidence of \$confidence (\$reason)"'
+sed -i --follow-symlinks -E "s/$SRC/$DST/" /etc/birdnet/birdnet.conf
+
+if ! [ -f $HOME/BirdNET-Pi/body.txt ];then
+  grep -E '^APPRISE_NOTIFICATION_BODY=".*"' /etc/birdnet/birdnet.conf | cut -d '"' -f 2 | sudo_with_user tee "$HOME/BirdNET-Pi/body.txt"
+  chmod g+w "$HOME/BirdNET-Pi/body.txt"
+  sed -i --follow-symlinks -E 's/^APPRISE_NOTIFICATION_BODY=/#APPRISE_NOTIFICATION_BODY=/' /etc/birdnet/birdnet.conf
 fi
 
-[ -L ~/BirdSongs/Extracted/weekly_report.php ] || ln -sf ~/BirdNET-Pi/scripts/weekly_report.php ~/BirdSongs/Extracted
-
-if ! grep weekly_report /etc/crontab &>/dev/null;then
-  sed "s/\$USER/$USER/g" $HOME/BirdNET-Pi/templates/weekly_report.cron | sudo tee -a /etc/crontab
-fi
-if ! grep APPRISE_WEEKLY_REPORT /etc/birdnet/birdnet.conf &>/dev/null;then
-  sudo -u$USER echo "APPRISE_WEEKLY_REPORT=1" >> /etc/birdnet/birdnet.conf
+if ! grep -E '^INFO_SITE=' /etc/birdnet/birdnet.conf &>/dev/null;then
+  echo "INFO_SITE=\"ALLABOUTBIRDS\"" >> /etc/birdnet/birdnet.conf
 fi
 
-if ! grep SILENCE_UPDATE_INDICATOR /etc/birdnet/birdnet.conf &>/dev/null;then
-  sudo -u$USER echo "SILENCE_UPDATE_INDICATOR=0" >> /etc/birdnet/birdnet.conf
+if ! grep -E '^COLOR_SCHEME=' /etc/birdnet/birdnet.conf &>/dev/null;then
+  echo "COLOR_SCHEME=\"light\"" >> /etc/birdnet/birdnet.conf
 fi
 
-if ! grep '\-\-browser.gatherUsageStats false' $HOME/BirdNET-Pi/templates/birdnet_stats.service &>/dev/null ;then
-  sudo -E sed -i "s|ExecStart=.*|ExecStart=$HOME/BirdNET-Pi/birdnet/bin/streamlit run $HOME/BirdNET-Pi/scripts/plotly_streamlit.py --browser.gatherUsageStats false --server.address localhost --server.baseUrlPath \"/stats\"|" $HOME/BirdNET-Pi/templates/birdnet_stats.service
-  sudo systemctl daemon-reload && restart_services.sh
+if ! grep -E '^PURGE_THRESHOLD=' /etc/birdnet/birdnet.conf &>/dev/null;then
+  echo "PURGE_THRESHOLD=95" >> /etc/birdnet/birdnet.conf
 fi
 
-# Make IceCast2 a little more secure
-sudo sed -i 's|<!-- <bind-address>.*|<bind-address>127.0.0.1</bind-address>|;s|<!-- <shoutcast-mount>.*|<shoutcast-mount>/stream</shoutcast-mount>|' /etc/icecast2/icecast.xml
-sudo systemctl restart icecast2
-
-if ! grep FREQSHIFT_TOOL /etc/birdnet/birdnet.conf &>/dev/null;then
-  sudo -u$USER echo "FREQSHIFT_TOOL=sox" >> /etc/birdnet/birdnet.conf
-fi
-if ! grep FREQSHIFT_HI /etc/birdnet/birdnet.conf &>/dev/null;then
-  sudo -u$USER echo "FREQSHIFT_HI=6000" >> /etc/birdnet/birdnet.conf
-fi
-if ! grep FREQSHIFT_LO /etc/birdnet/birdnet.conf &>/dev/null;then
-  sudo -u$USER echo "FREQSHIFT_LO=3000" >> /etc/birdnet/birdnet.conf
-fi
-if ! grep FREQSHIFT_PITCH /etc/birdnet/birdnet.conf &>/dev/null;then
-  sudo -u$USER echo "FREQSHIFT_PITCH=-1500" >> /etc/birdnet/birdnet.conf
-fi
-if ! grep HEARTBEAT_URL /etc/birdnet/birdnet.conf &>/dev/null;then
-  sudo -u$USER echo "HEARTBEAT_URL=" >> /etc/birdnet/birdnet.conf
+if ! grep -E '^MAX_FILES_SPECIES=' /etc/birdnet/birdnet.conf &>/dev/null;then
+  echo "MAX_FILES_SPECIES=\"0\"" >> /etc/birdnet/birdnet.conf
 fi
 
-if ! grep MODEL /etc/birdnet/birdnet.conf &>/dev/null;then
-  sudo -u$USER echo "MODEL=BirdNET_6K_GLOBAL_MODEL" >> /etc/birdnet/birdnet.conf
+if ! grep -E '^AUTOMATIC_UPDATE=' /etc/birdnet/birdnet.conf &>/dev/null;then
+  echo "AUTOMATIC_UPDATE=0" >> /etc/birdnet/birdnet.conf
 fi
-if ! grep SF_THRESH /etc/birdnet/birdnet.conf &>/dev/null;then
-  sudo -u$USER echo "SF_THRESH=0.03" >> /etc/birdnet/birdnet.conf
-fi
-sudo chmod +x ~/BirdNET-Pi/scripts/install_language_label_nm.sh
 
-sudo systemctl daemon-reload
+if ! grep -E '^RARE_SPECIES_THRESHOLD=' /etc/birdnet/birdnet.conf &>/dev/null;then
+  echo '## RARE_SPECIES_THRESHOLD defines after how many days a species is considered as rare and highlighted on overview page' >> /etc/birdnet/birdnet.conf
+  echo "RARE_SPECIES_THRESHOLD=\"30\"" >> /etc/birdnet/birdnet.conf
+fi
+
+if ! grep -E '^IMAGE_PROVIDER=' /etc/birdnet/birdnet.conf &>/dev/null;then
+  if grep -E '^FLICKR_API_KEY=\S+' /etc/birdnet/birdnet.conf &>/dev/null;then
+    PROVIDER=FLICKR
+  else
+    PROVIDER=""
+  fi
+  echo '## WIKIPEDIA or FLICKR (Flickr requires API key)' >> /etc/birdnet/birdnet.conf
+  echo "IMAGE_PROVIDER=${PROVIDER}" >> /etc/birdnet/birdnet.conf
+fi
+
+if grep -E '^DATABASE_LANG=zh$' /etc/birdnet/birdnet.conf &>/dev/null;then
+  sed -i --follow-symlinks -E 's/^DATABASE_LANG=zh/DATABASE_LANG=zh_CN/' /etc/birdnet/birdnet.conf
+  install_language_label.sh
+fi
+
+[ -d $RECS_DIR/StreamData ] || sudo_with_user mkdir -p $RECS_DIR/StreamData
+[ -L ${EXTRACTED}/spectrogram.png ] || sudo_with_user ln -sf ${RECS_DIR}/StreamData/spectrogram.png ${EXTRACTED}/spectrogram.png
+
+if ! which inotifywait &>/dev/null;then
+  ensure_apt_updated
+  apt-get -y install inotify-tools
+fi
+
+apprise_version=$($HOME/BirdNET-Pi/birdnet/bin/python3 -c "import apprise; print(apprise.__version__)")
+[[ $apprise_version != "1.9.5" ]] && sudo_with_user $HOME/BirdNET-Pi/birdnet/bin/pip3 install apprise==1.9.5
+version=$($HOME/BirdNET-Pi/birdnet/bin/python3 -c "import streamlit; print(streamlit.__version__)")
+[[ $version != "1.44.0" ]] && sudo_with_user $HOME/BirdNET-Pi/birdnet/bin/pip3 install streamlit==1.44.0
+version=$($HOME/BirdNET-Pi/birdnet/bin/python3 -c "import seaborn; print(seaborn.__version__)")
+[[ $version != "0.13.2" ]] && sudo_with_user $HOME/BirdNET-Pi/birdnet/bin/pip3 install seaborn==0.13.2
+version=$($HOME/BirdNET-Pi/birdnet/bin/python3 -c "import suntime; print(suntime.__version__)")
+[[ $version != "1.3.2" ]] && sudo_with_user $HOME/BirdNET-Pi/birdnet/bin/pip3 install suntime==1.3.2
+version=$($HOME/BirdNET-Pi/birdnet/bin/python3 -c "import pyarrow; print(pyarrow.__version__)")
+[[ $version != "20.0.0" ]] && sudo_with_user $HOME/BirdNET-Pi/birdnet/bin/pip3 install pyarrow==20.0.0
+
+PY_VERSION=$($HOME/BirdNET-Pi/birdnet/bin/python3 -c "import sys; print(f'{sys.version_info[0]}{sys.version_info[1]}')")
+tf_version=$($HOME/BirdNET-Pi/birdnet/bin/python3 -c "import tflite_runtime; print(tflite_runtime.__version__)")
+if [ "$PY_VERSION" == 39 ] && [ "$tf_version" != "2.11.0" ] || [ "$PY_VERSION" != 39 ] && [ "$tf_version" != "2.17.1" ]; then
+  get_tf_whl
+  # include our numpy dependants so pip can figure out which numpy version to install
+  sudo_with_user $HOME/BirdNET-Pi/birdnet/bin/pip3 install $HOME/BirdNET-Pi/$WHL pandas librosa matplotlib
+fi
+
+ensure_python_package inotify inotify
+ensure_python_package soundfile soundfile
+
+if ! which inotifywait &>/dev/null;then
+  ensure_apt_updated
+  apt-get -y install inotify-tools
+fi
+
+install_tmp_mount
+remove_unit_file birdnet_server.service /usr/local/bin/server.py
+remove_unit_file extraction.service /usr/local/bin/extract_new_birdsounds.sh
+
+if ! grep 'daemon' $HOME/BirdNET-Pi/templates/chart_viewer.service &>/dev/null;then
+  sed -i "s|daily_plot.py.*|daily_plot.py --daemon --sleep 2|" ~/BirdNET-Pi/templates/chart_viewer.service
+  systemctl daemon-reload && restart_services.sh
+fi
+
+if grep -q 'birdnet_server.service' "$HOME/BirdNET-Pi/templates/birdnet_analysis.service" &>/dev/null; then
+    sed -i '/After=.*/d' "$HOME/BirdNET-Pi/templates/birdnet_analysis.service"
+    sed -i '/Requires=.*/d' "$HOME/BirdNET-Pi/templates/birdnet_analysis.service"
+    sed -i '/RuntimeMaxSec=.*/d' "$HOME/BirdNET-Pi/templates/birdnet_analysis.service"
+    sed -i "s|ExecStart=.*|ExecStart=$HOME/BirdNET-Pi/birdnet/bin/python3 /usr/local/bin/birdnet_analysis.py|" "$HOME/BirdNET-Pi/templates/birdnet_analysis.service"
+    systemctl daemon-reload && restart_services.sh
+fi
+
+TMP_MOUNT=$(systemd-escape -p --suffix=mount "$RECS_DIR/StreamData")
+if ! [ -f "$HOME/BirdNET-Pi/templates/$TMP_MOUNT" ]; then
+   install_birdnet_mount
+   chown $USER:$USER "$HOME/BirdNET-Pi/templates/$TMP_MOUNT"
+fi
+
+if grep -q -e '-P log' $HOME/BirdNET-Pi/templates/birdnet_log.service ; then
+  sed -i "s/-P log/--path log/" ~/BirdNET-Pi/templates/birdnet_log.service
+  systemctl daemon-reload && restart_services.sh
+fi
+
+if grep -q -e '-P terminal' $HOME/BirdNET-Pi/templates/web_terminal.service ; then
+  sed -i "s/-P terminal/--path terminal/" ~/BirdNET-Pi/templates/web_terminal.service
+  systemctl daemon-reload && systemctl restart web_terminal.service
+fi
+
+if grep -q -e ' login' $HOME/BirdNET-Pi/templates/web_terminal.service ; then
+  sed -i "s/ login/ bash -c 'read -p \"Login: \" username \&\& [[ \"\$username\" =~ ^[-_.a-z0-9]{1,30}\$ ]] \&\& su --pty -l \$username'/" ~/BirdNET-Pi/templates/web_terminal.service
+  sed -i "/\[Service\]/a User=$BIRDNET_USER" ~/BirdNET-Pi/templates/web_terminal.service
+  systemctl daemon-reload && systemctl restart web_terminal.service
+fi
+
+if grep -q -e 'Environment=XDG_RUNTIME_DIR=/run/user/' $HOME/BirdNET-Pi/templates/birdnet_recording.service; then
+  sed -i '/^Environment=XDG_RUNTIME_DIR=\/run\/user\/[0-9]\+/d' $HOME/BirdNET-Pi/templates/birdnet_recording.service
+  systemctl daemon-reload && restart_services.sh
+fi
+
+if grep -q -e 'Environment=XDG_RUNTIME_DIR=/run/user/' $HOME/BirdNET-Pi/templates/custom_recording.service; then
+  sed -i '/^Environment=XDG_RUNTIME_DIR=\/run\/user\/[0-9]\+/d' $HOME/BirdNET-Pi/templates/custom_recording.service
+  systemctl daemon-reload && restart_services.sh
+fi
+
+if grep -q -e 'Environment=XDG_RUNTIME_DIR=/run/user/' $HOME/BirdNET-Pi/templates/livestream.service; then
+  sed -i '/^Environment=XDG_RUNTIME_DIR=\/run\/user\/[0-9]\+/d' $HOME/BirdNET-Pi/templates/livestream.service
+  systemctl daemon-reload && restart_services.sh
+fi
+
+if grep -q 'php7.4-' /etc/caddy/Caddyfile &>/dev/null; then
+  sed -i 's/php7.4-/php-/' /etc/caddy/Caddyfile
+fi
+
+if ! [ -L /etc/avahi/services/http.service ];then
+  # symbolic link does not work here, so just copy
+  cp -f $HOME/BirdNET-Pi/templates/http.service /etc/avahi/services/
+  systemctl restart avahi-daemon.service
+fi
+
+if [ -L /usr/local/bin/analyze.py ];then
+  rm -f /usr/local/bin/analyze.py
+fi
+
+if [ -L /usr/local/bin/birdnet_analysis.sh ];then
+  rm -f /usr/local/bin/birdnet_analysis.sh
+fi
+
+# Clean state and update cron if all scripts are not installed
+if [ "$(grep -o "#birdnet" /etc/crontab | wc -l)" -lt 6 ]; then
+  sudo sed -i '/birdnet/,+1d' /etc/crontab
+  sed "s/\$USER/$USER/g" "$HOME"/BirdNET-Pi/templates/cleanup.cron >> /etc/crontab
+  sed "s/\$USER/$USER/g" "$HOME"/BirdNET-Pi/templates/weekly_report.cron >> /etc/crontab
+  sed "s/\$USER/$USER/g" "$HOME"/BirdNET-Pi/templates/automatic_update.cron >> /etc/crontab
+fi
+
+set +x
+AUTH=$(grep basicauth /etc/caddy/Caddyfile)
+[ -n "${CADDY_PWD}" ] && [ -z "${AUTH}" ] && sudo /usr/local/bin/update_caddyfile.sh > /dev/null 2>&1
+set -x
+
+if [ -L $HOME/BirdNET-Pi/model/labels_flickr.txt ]; then
+  rm $HOME/BirdNET-Pi/model/labels_flickr.txt
+fi
+if [ -L $HOME/BirdNET-Pi/model/labels.txt ]; then
+  sudo_with_user install_language_label.sh
+fi
+
+sqlite3 $HOME/BirdNET-Pi/scripts/birds.db << EOF
+CREATE INDEX IF NOT EXISTS "detections_Sci_Name" ON "detections" ("Sci_Name");
+EOF
+
+# update snippets above
+
+systemctl daemon-reload
 restart_services.sh
