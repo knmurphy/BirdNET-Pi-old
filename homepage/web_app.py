@@ -16,11 +16,14 @@ from fasthtml.common import (
     FastHTML, serve,
     Html, Head, Body, Title, Meta, Link, Style, Script,
     Main, Nav, Header,
-    Div, H2, H3, P, A, Audio, Span, Table, Thead, Tbody, Tr, Th, Td,
+    Div, H2, A, Audio, Span,
 )
 
 # API configuration - connect to FastAPI backend
 API_BASE_URL = os.environ.get("FIELD_STATION_API_URL", "http://127.0.0.1:8003")
+
+# Station display name shown in the header (override via env var)
+STATION_MODEL = os.environ.get("STATION_MODEL", "BirdNET-Pi · RPi 4B")
 
 # Confidence thresholds for visual indicators
 CONF_HIGH = 0.80
@@ -31,6 +34,7 @@ CPU_WARN = 60
 CPU_DANGER = 80
 TEMP_WARN = 55
 TEMP_DANGER = 70
+TEMP_GAUGE_MAX = 85   # Maximum temperature used for gauge scaling (°C)
 DISK_WARN = 70
 DISK_DANGER = 85
 
@@ -633,6 +637,20 @@ a:hover { text-decoration: underline; }
   width: 90px;
   flex-shrink: 0;
 }
+
+/* ── Layout utility classes ── */
+.grid-2col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+.widget-cell {
+  border: none;
+  border-bottom: 1px solid var(--border);
+  padding: 12px 14px;
+}
+.widget-cell-border-right {
+  border-right: 1px solid var(--border);
+}
 """
 
 
@@ -717,7 +735,6 @@ def _dashboard_content():
     activity = _hourly_activity_chart(hourly_counts)
 
     return Div(
-        H2("Dashboard", style="display:none"),
         strip,
         latest_section,
         activity,
@@ -729,16 +746,14 @@ def _dashboard_content():
             Div(
                 Div(str(today_count), cls="widget-value"),
                 Div("Today's Detections", cls="widget-label"),
-                cls="widget",
-                style="border: none; border-bottom: 1px solid var(--border); border-right: 1px solid var(--border); padding: 12px 14px;",
+                cls="widget widget-cell widget-cell-border-right",
             ),
             Div(
                 Div(str(species_count), cls="widget-value"),
                 Div("Today's Species", cls="widget-label"),
-                cls="widget",
-                style="border: none; border-bottom: 1px solid var(--border); padding: 12px 14px;",
+                cls="widget widget-cell",
             ),
-            style="display:grid;grid-template-columns:1fr 1fr;",
+            cls="grid-2col",
         ),
     )
 
@@ -748,22 +763,31 @@ def _shell(content, current_path: str = "/app/dashboard"):
     current_time = datetime.now().strftime("%H:%M:%S")
 
     tabs = [
-        ("⬤", "LIVE", "/app/dashboard"),
-        ("☰", "LOG", "/app/detections"),
-        ("◈", "SPECIES", "/app/species"),
-        ("∿", "STATS", "/app/stats"),
-        ("⚙", "CONFIG", "/app/settings"),
+        ("⬤", "LIVE", "/app/dashboard", "Dashboard – Live view"),
+        ("☰", "LOG", "/app/detections", "Detection log"),
+        ("◈", "SPECIES", "/app/species", "Species catalog"),
+        ("∿", "STATS", "/app/stats", "Statistics"),
+        ("⚙", "CONFIG", "/app/settings", "Configuration"),
     ]
 
     nav_links = [
         A(
-            Span(icon, cls="nav-icon"),
+            Span(icon, cls="nav-icon", aria_hidden="true"),
             label,
             href=path,
             cls="active" if current_path == path else "",
+            aria_label=aria_label,
         )
-        for icon, label, path in tabs
+        for icon, label, path, aria_label in tabs
     ]
+
+    fonts_url = (
+        "https://fonts.googleapis.com/css2?"
+        "family=DM+Mono:ital,wght@0,300;0,400;1,300"
+        "&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,600;1,9..144,400"
+        "&family=Source+Serif+4:ital,opsz,wght@0,8..60,300;0,8..60,400;1,8..60,300"
+        "&display=swap"
+    )
 
     return Html(
         Head(
@@ -772,10 +796,7 @@ def _shell(content, current_path: str = "/app/dashboard"):
             Meta(name="theme-color", content="#0D0F0B"),
             Link(rel="preconnect", href="https://fonts.googleapis.com"),
             Link(rel="preconnect", href="https://fonts.gstatic.com", crossorigin=""),
-            Link(
-                rel="stylesheet",
-                href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;1,300&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,600;1,9..144,400&family=Source+Serif+4:ital,opsz,wght@0,8..60,300;0,8..60,400;1,8..60,300&display=swap"
-            ),
+            Link(rel="stylesheet", href=fonts_url),
             Title("Field Station"),
             Style(APP_CSS),
         ),
@@ -786,7 +807,7 @@ def _shell(content, current_path: str = "/app/dashboard"):
                         Div(cls="station-dot"),
                         Div(
                             Div("FIELD STATION", cls="station-name"),
-                            Div("BirdNET-Pi · RPi 4B", cls="station-id"),
+                            Div(STATION_MODEL, cls="station-id"),
                         ),
                         cls="header-left",
                     ),
@@ -794,7 +815,7 @@ def _shell(content, current_path: str = "/app/dashboard"):
                     cls="topbar",
                 ),
                 Main(content, id="content"),
-                Nav(*nav_links, cls="bottom-nav"),
+                Nav(*nav_links, cls="bottom-nav", aria_label="Main navigation"),
                 cls="app-shell",
             ),
             Script("""
@@ -907,12 +928,17 @@ def _detections_content():
         ]
         if audio_url:
             row_children.append(
-                Audio(src=audio_url, controls=True, preload="none", cls="det-row-audio")
+                Audio(
+                    src=audio_url,
+                    controls=True,
+                    preload="none",
+                    cls="det-row-audio",
+                    title=f"Audio recording of {s['com_name']}",
+                )
             )
         rows.append(Div(*row_children, cls="det-row"))
 
     return Div(
-        H2("Today's Detections", style="display:none"),
         Div(
             Div("TODAY'S DETECTIONS", cls="section-label-title"),
             Div(f"{len(species_list)} species", cls="section-label-meta"),
@@ -971,7 +997,6 @@ def _species_content():
         )
 
     return Div(
-        H2("Today's Species", style="display:none"),
         Div(
             Div("SPECIES", cls="section-label-title"),
             Div(f"{len(species_list)} today", cls="section-label-meta"),
@@ -1074,20 +1099,12 @@ def _system_health_section() -> Div:
         ),
         Div(
             readout("CPU Load", f"{cpu:.0f}", "%", int(cpu), cpu_color),
-            readout("Temperature", f"{temp:.1f}", "°C", int(temp / 85 * 100), temp_color),
+            readout("Temperature", f"{temp:.1f}", "°C", int(temp / TEMP_GAUGE_MAX * 100), temp_color),
             readout("Disk Usage", f"{disk_used:.1f}/{disk_total:.0f}", "GB", disk_pct, disk_color),
             readout("Uptime", f"{uptime_h:.1f}", "h"),
             cls="readout-grid",
             style="padding: 12px 16px 14px;",
         ),
-        Div(
-            Div("Disk Usage", cls="health-label"),
-            Div(f"{disk_used:.1f} / {disk_total:.0f} GB", cls="health-value"),
-            Div(f"{disk_pct}% used", cls="health-detail"),
-            cls="health-item",
-            style="display:none",
-        ),
-        Div("Database", style="display:none"),
     )
 
 
@@ -1103,7 +1120,6 @@ def _stats_content():
 
     today_detections = summary.get("total_detections", 0)
     today_species = summary.get("species_count", 0)
-    hourly_counts = summary.get("hourly_counts", [0] * 24)
 
     return Div(
         H2("Statistics"),
@@ -1111,16 +1127,14 @@ def _stats_content():
             Div(
                 Div(str(today_detections), cls="widget-value"),
                 Div("Today's Detections", cls="widget-label"),
-                cls="widget",
-                style="border:none;border-bottom:1px solid var(--border);border-right:1px solid var(--border);padding:12px 14px;",
+                cls="widget widget-cell widget-cell-border-right",
             ),
             Div(
                 Div(str(today_species), cls="widget-value"),
                 Div("Today's Species", cls="widget-label"),
-                cls="widget",
-                style="border:none;border-bottom:1px solid var(--border);padding:12px 14px;",
+                cls="widget widget-cell",
             ),
-            style="display:grid;grid-template-columns:1fr 1fr;",
+            cls="grid-2col",
         ),
         _hourly_activity_section(),
         _system_health_section(),
@@ -1152,7 +1166,6 @@ def _settings_content():
         )
 
     items = [
-        H2("Settings", style="display:none"),
         Div(
             Div("CONFIGURATION", cls="section-label-title"),
             cls="section-label",
