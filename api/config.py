@@ -13,7 +13,7 @@ class Settings(BaseSettings):
 
     # Server settings
     api_host: str = "0.0.0.0"
-    api_port: int = 8000
+    api_port: int = 8003
 
     # BirdNET-Pi config file path
     config_ini_path: Path = Path.home() / "BirdNET-Pi" / "birdnet.conf"
