@@ -6,6 +6,7 @@ Built with FastHTML for HTMX-based navigation (no iframe, no full page reload).
 
 This version uses the FastAPI backend for data instead of direct database queries.
 """
+import json
 import os
 import logging
 import httpx
@@ -15,7 +16,7 @@ from fasthtml.common import (
     FastHTML, serve,
     Html, Head, Body, Title, Meta, Link, Style, Script,
     Main, Nav, Header,
-    Div, H2, H3, P, A, Audio, Span,
+    Div, H2, H3, P, A, Span,
 )
 
 # API configuration - connect to FastAPI backend
@@ -342,7 +343,7 @@ a:hover { text-decoration: underline; }
 # JavaScript for SSE live updates
 LIVE_JS = """
 (function() {
-  var API_URL = '__API_URL__';
+  var API_URL = %s;
   var evtSrc = null;
   var feedMax = 20;
 
@@ -354,6 +355,7 @@ LIVE_JS = """
   }
 
   function connect() {
+    if (!document.getElementById('live-feed')) return;
     if (evtSrc) { evtSrc.close(); }
     evtSrc = new EventSource(API_URL + '/api/events');
 
@@ -384,7 +386,7 @@ LIVE_JS = """
     item.className = 'live-feed-item';
     item.innerHTML = '<span class="feed-time">' + d.time + '</span> '
       + '<span class="feed-species">' + escapeHtml(d.com_name) + '</span> '
-      + '<span class="feed-confidence">(' + conf + '%)</span>';
+      + '<span class="feed-confidence">(' + conf + '%%)</span>';
     feed.insertBefore(item, feed.firstChild);
     while (feed.children.length > feedMax) { feed.removeChild(feed.lastChild); }
   }
@@ -509,8 +511,8 @@ def _shell(content, current_path: str = "/app/dashboard"):
         for name, path in tabs
     ]
 
-    # Inject the API URL into the SSE JavaScript
-    live_js = LIVE_JS.replace("__API_URL__", API_BASE_URL)
+    # Safely inject the API URL into the SSE JavaScript via JSON encoding
+    live_js = LIVE_JS % json.dumps(API_BASE_URL.rstrip("/"))
 
     return Html(
         Head(
@@ -520,11 +522,17 @@ def _shell(content, current_path: str = "/app/dashboard"):
             Link(rel="preconnect", href="https://fonts.gstatic.com", crossorigin=""),
             Link(
                 rel="stylesheet",
-                href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:wght@400;700&family=Source+Serif+4:ital,wght@0,400;1,400&display=swap"
+                href=(
+                    "https://fonts.googleapis.com/css2?"
+                    "family=DM+Mono:wght@400;500"
+                    "&family=Fraunces:wght@400;700"
+                    "&family=Source+Serif+4:ital,wght@0,400;1,400"
+                    "&display=swap"
+                )
             ),
             Title("Field Station"),
             Style(APP_CSS),
-            Script(src="https://unpkg.com/htmx.org@2.0.4",
+            Script(src="https://unpkg.com/htmx.org@2.0.4/dist/htmx.min.js",
                    integrity="sha384-OLBgp1GsljhM2TJ+sbHjaiH9txEUvgdDTAzHv2P24donTt6/529l+9Ua0vFImLlb",
                    crossorigin="anonymous"),
         ),
@@ -563,18 +571,18 @@ def _detections_content():
     """Generate the detections list content using the API."""
     # Fetch species data from API
     data = api_get("/api/species/today")
-    
+
     if data is None:
         return Div(
             H2("Today's Detections"),
             P("Unable to connect to API.", cls="error-message"),
         )
-    
+
     species_list = data.get("species", [])
-    
+
     if not species_list:
         return Div(H2("Today's Detections"), P("No detections yet today."))
-    
+
     # Show species with counts (API doesn't return individual detections yet)
     items = [
         Div(
@@ -595,18 +603,18 @@ def species():
 def _species_content():
     """Generate the species list content using the API."""
     data = api_get("/api/species/today")
-    
+
     if data is None:
         return Div(
             H2("Today's Species"),
             P("Unable to connect to API.", cls="error-message"),
         )
-    
+
     species_list = data.get("species", [])
-    
+
     if not species_list:
         return Div(H2("Today's Species"), P("No species detected today."))
-    
+
     items = [
         Div(
             f"{s['com_name']} ({s['sci_name']}) - {s['detection_count']} detections (max: {s['max_confidence']*100:.0f}%)",
@@ -626,25 +634,25 @@ def stats():
 def _hourly_activity_section() -> Div:
     """Generate hourly activity bar chart for today using API data."""
     summary = api_get("/api/detections/today/summary")
-    
+
     if summary is None:
         return Div(
             H3("Today's Activity"),
             P("Unable to load activity data.", cls="text2"),
             cls="hourly-chart"
         )
-    
+
     hourly_counts = summary.get("hourly_counts", [0] * 24)
-    
+
     if not any(hourly_counts):
         return Div(
             H3("Today's Activity"),
             P("No detections yet today.", cls="text2"),
             cls="hourly-chart"
         )
-    
+
     max_count = max(hourly_counts) if hourly_counts else 1
-    
+
     bar_rows = []
     for hour in range(24):
         count = hourly_counts[hour] if hour < len(hourly_counts) else 0
@@ -660,7 +668,7 @@ def _hourly_activity_section() -> Div:
                 cls="hourly-bar-row"
             )
         )
-    
+
     return Div(
         H3("Today's Activity"),
         Div(*bar_rows, cls="hourly-chart"),
@@ -676,6 +684,7 @@ def _system_health_section() -> Div:
             H3("System Health"),
             P("Unable to load system data.", cls="error-message"),
             id="system-health",
+            **SYSTEM_HEALTH_POLL,
         )
 
     return Div(
@@ -717,13 +726,13 @@ def _system_health_section() -> Div:
 def _stats_content():
     """Generate the stats content using the API."""
     summary = api_get("/api/detections/today/summary")
-    
+
     if summary is None:
         return Div(
             H2("Statistics"),
             P("Unable to connect to API.", cls="error-message"),
         )
-    
+
     today_detections = summary.get("total_detections", 0)
     today_species = summary.get("species_count", 0)
 
@@ -754,13 +763,13 @@ def _settings_content():
     """Generate the settings content using the API."""
     settings_data = api_get("/api/settings")
     classifiers = api_get("/api/classifiers")
-    
+
     if settings_data is None:
         return Div(
             H2("Settings"),
             P("Unable to connect to API.", cls="error-message"),
         )
-    
+
     items = [
         H2("Settings"),
         Div(
@@ -779,7 +788,7 @@ def _settings_content():
             cls="health-item"
         ),
     ]
-    
+
     if classifiers:
         classifier_names = [c["name"] for c in classifiers if c.get("enabled", False)]
         items.append(
@@ -789,7 +798,7 @@ def _settings_content():
                 cls="health-item"
             )
         )
-    
+
     return Div(*items, cls="health-grid")
 
 

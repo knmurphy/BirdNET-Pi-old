@@ -3,7 +3,6 @@ Tests for Field Station OS FastHTML web application.
 
 Following TDD: Write the test first, watch it fail, write minimal code to pass.
 """
-import pytest
 from fasthtml.common import FastHTML
 import sqlite3
 from unittest.mock import patch
@@ -11,12 +10,12 @@ from unittest.mock import patch
 
 class TestAppCreation:
     """Test that the FastHTML app can be created and configured."""
-    
+
     def test_app_exists(self):
         """The FastHTML app should be creatable."""
         from homepage.web_app import app
         assert app is not None
-    
+
     def test_app_is_fasthtml_instance(self):
         """The app should be a FastHTML instance."""
         from homepage.web_app import app
@@ -25,7 +24,7 @@ class TestAppCreation:
 
 class TestDashboardRoute:
     """Test the dashboard route."""
-    
+
     def test_dashboard_route_exists(self):
         """The /app/dashboard route should be registered."""
         from homepage.web_app import app
@@ -36,7 +35,7 @@ class TestDashboardRoute:
 
 class TestDashboardContent:
     """Test dashboard content generation."""
-    
+
     def test_dashboard_returns_html_with_title(self):
         """Dashboard should return HTML containing the site title."""
         from homepage.web_app import _dashboard_content
@@ -47,14 +46,14 @@ class TestDashboardContent:
 
 class TestDatabase:
     """Test database connectivity and queries."""
-    
+
     def test_get_today_detection_count(self):
         """Should be able to query today's detection count from database."""
         from homepage.web_app import get_today_detection_count
         count = get_today_detection_count()
         assert isinstance(count, int)
         assert count >= 0
-    
+
     def test_get_today_species_count(self):
         """Should query count of distinct species detected today."""
         from homepage.web_app import get_today_species_count
@@ -89,7 +88,6 @@ class TestDashboardWidgets:
         assert "Today's Detections" in content
         assert 'class="widget"' in content
 
-
     def test_dashboard_shows_today_species_count(self):
         """Dashboard should display today's species count."""
         from homepage.web_app import _dashboard_content
@@ -97,14 +95,12 @@ class TestDashboardWidgets:
         # Dashboard should show species count in a widget with proper structure
         assert "Today's Species" in content
 
-
     def test_dashboard_shows_latest_detection(self):
         """Dashboard should display the most recent detection."""
         from homepage.web_app import _dashboard_content
         content = str(_dashboard_content())
         # Should show latest detection section with proper label
         assert "Latest Detection" in content or "No detections yet" in content
-
 
     def test_dashboard_uses_widget_classes(self):
         """Dashboard should use .widget class for styling."""
@@ -160,8 +156,6 @@ class TestDetectionsRoute:
             assert "<audio" in content, "Detections should include audio elements"
             assert "controls" in content, "Audio elements should have controls"
 
-
-
     def test_confidence_class_helper(self):
         """The _confidence_class helper should return correct classes."""
         from homepage.web_app import _confidence_class
@@ -170,6 +164,7 @@ class TestDetectionsRoute:
         assert _confidence_class(0.70) == "conf-medium"
         assert _confidence_class(0.50) == "conf-medium"
         assert _confidence_class(0.40) == "conf-low"
+
 
 class TestSpeciesRoute:
     """Test the species route."""
@@ -198,7 +193,6 @@ class TestSpeciesRoute:
         # If no species (empty state), the test passes vacuously
         if "No species detected" not in content and "Error loading" not in content:
             assert has_conf_class, "Species content should use confidence classes"
-
 
 
 class TestStatsRoute:
@@ -412,26 +406,55 @@ class TestLiveDataWiring:
         routes = [r.path for r in app.routes]
         assert "/app/partials/system-health" in routes
 
-    def test_dashboard_has_live_feed_section(self):
+    @patch("homepage.web_app.api_get")
+    def test_dashboard_has_live_feed_section(self, mock_api_get):
         """Dashboard should have a live feed section."""
+        mock_api_get.return_value = {
+            "total_detections": 5, "species_count": 3,
+            "top_species": [], "hourly_counts": [0] * 24,
+            "generated_at": "2024-01-01T00:00:00",
+        }
         from homepage.web_app import _dashboard_content
         content = str(_dashboard_content())
-        assert "live-feed" in content or "Live Feed" in content or "error-message" in content
+        assert "live-feed" in content
 
-    def test_dashboard_has_live_indicator(self):
+    @patch("homepage.web_app.api_get")
+    def test_dashboard_has_live_indicator(self, mock_api_get):
         """Dashboard should have a live status indicator."""
+        mock_api_get.return_value = {
+            "total_detections": 5, "species_count": 3,
+            "top_species": [], "hourly_counts": [0] * 24,
+            "generated_at": "2024-01-01T00:00:00",
+        }
         from homepage.web_app import _dashboard_content
         content = str(_dashboard_content())
-        assert "live-dot" in content or "error-message" in content
+        assert "live-dot" in content
 
-    def test_dashboard_stats_have_htmx_polling(self):
+    @patch("homepage.web_app.api_get")
+    def test_dashboard_stats_have_htmx_polling(self, mock_api_get):
         """Dashboard stats should have hx-get for HTMX polling."""
+        mock_api_get.return_value = {
+            "total_detections": 5, "species_count": 3,
+            "top_species": [], "hourly_counts": [0] * 24,
+            "generated_at": "2024-01-01T00:00:00",
+        }
         from homepage.web_app import _dashboard_content
         content = str(_dashboard_content())
-        assert "hx-get" in content or "error-message" in content
+        assert "hx-get" in content
 
-    def test_dashboard_stats_have_widget_ids(self):
+    @patch("homepage.web_app.api_get")
+    def test_dashboard_stats_have_widget_ids(self, mock_api_get):
         """Dashboard widgets should have IDs for SSE JavaScript updates."""
+        mock_api_get.return_value = {
+            "total_detections": 5, "species_count": 3,
+            "top_species": [], "hourly_counts": [0] * 24,
+            "generated_at": "2024-01-01T00:00:00",
+        }
         from homepage.web_app import _dashboard_content
         content = str(_dashboard_content())
-        assert "today-count" in content or "error-message" in content
+        assert "today-count" in content
+
+    def test_sse_connect_gated_behind_live_feed(self):
+        """SSE connect() should only run if live-feed element exists."""
+        from homepage.web_app import LIVE_JS
+        assert "getElementById('live-feed')" in LIVE_JS

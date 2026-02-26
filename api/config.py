@@ -23,5 +23,6 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_prefix="FIELD_STATION_")
 
+
 # Global settings instance
 settings = Settings()
