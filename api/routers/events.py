@@ -26,10 +26,9 @@ async def event_stream():
         # Send initial connection message
         yield f"event: connected\ndata: {{\"timestamp\": \"{datetime.now().isoformat()}\"}}\n\n"
 
-        # Subscribe to detection events
-        queue = event_bus.subscribe()
-
+        queue = None
         try:
+            queue = event_bus.subscribe()
             # Wait for events
             while True:
                 try:
@@ -44,7 +43,8 @@ async def event_stream():
         except asyncio.CancelledError:
             pass
         finally:
-            event_bus.unsubscribe(queue)
+            if queue is not None:
+                event_bus.unsubscribe(queue)
     
     return StreamingResponse(
         generate(),

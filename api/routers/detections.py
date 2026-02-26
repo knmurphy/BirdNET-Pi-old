@@ -39,6 +39,7 @@ async def get_detections(
     Note: Currently uses SQLite until DuckDB migration is complete.
     Classifier filtering is not available in SQLite schema.
     """
+    conn = None
     try:
         conn = get_connection()
         cursor = conn.cursor()
@@ -86,8 +87,6 @@ async def get_detections(
         cursor.execute(data_query, params_with_pagination)
         rows = cursor.fetchall()
         
-        conn.close()
-        
         # Convert to Detection models
         detections = [
             Detection(
@@ -120,6 +119,9 @@ async def get_detections(
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
 
 
 @router.get("/detections/today/summary", response_model=TodaySummaryResponse)
@@ -130,6 +132,7 @@ async def get_today_summary():
     """
     today = date.today().isoformat()
 
+    conn = None
     try:
         conn = get_connection()
         cursor = conn.cursor()
@@ -177,8 +180,6 @@ async def get_today_summary():
             if hour is not None and 0 <= hour < 24:
                 hourly_counts[hour] = count
 
-        conn.close()
-
         return TodaySummaryResponse(
             total_detections=total,
             species_count=species_count,
@@ -189,3 +190,6 @@ async def get_today_summary():
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+    finally:
+        if conn:
+            conn.close()

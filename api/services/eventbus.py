@@ -34,7 +34,6 @@ class EventBus:
 
     def __init__(self):
         self._subscribers: list[asyncio.Queue] = []
-        self._lock = asyncio.Lock()
 
     def subscribe(self) -> asyncio.Queue:
         """Subscribe to detection events.
@@ -52,8 +51,10 @@ class EventBus:
         Args:
             queue: The queue returned by subscribe().
         """
-        if queue in self._subscribers:
+        try:
             self._subscribers.remove(queue)
+        except ValueError:
+            pass
 
     async def publish(self, event: DetectionEvent) -> int:
         """Publish a detection event to all subscribers.
@@ -65,7 +66,7 @@ class EventBus:
             Number of subscribers that received the event.
         """
         delivered = 0
-        for queue in self._subscribers:
+        for queue in list(self._subscribers):  # snapshot copy
             try:
                 queue.put_nowait(event)
                 delivered += 1

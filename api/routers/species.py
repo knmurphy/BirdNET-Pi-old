@@ -15,6 +15,7 @@ async def get_species_today():
     """Get all species detected today with counts and hourly breakdown."""
     today = date.today().isoformat()
 
+    conn = None
     try:
         conn = get_connection()
         cursor = conn.cursor()
@@ -62,8 +63,6 @@ async def get_species_today():
                 hourly_counts=hourly_counts,
             ))
 
-        conn.close()
-
         return SpeciesTodayResponse(
             species=species_list,
             generated_at=datetime.now().isoformat(),
@@ -71,3 +70,6 @@ async def get_species_today():
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+    finally:
+        if conn:
+            conn.close()

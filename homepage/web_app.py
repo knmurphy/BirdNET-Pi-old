@@ -963,7 +963,7 @@ LIVE_JS = """
         var d = JSON.parse(e.data);
         addFeedItem(d);
         incrementCounter('today-count');
-      } catch(err) {}
+      } catch(err) { console.error('SSE parse error:', err); }
     });
 
     evtSrc.onerror = function() {
@@ -1338,29 +1338,12 @@ def _system_health_section() -> Div:
     """Generate system health widgets using direct system queries."""
     health = get_system_health()
 
-    return Div(
-        H3("System Health"),
-        Div(
-            Div(
-                Div("Disk Usage", cls="health-label"),
-                Div(f"{health['disk_used_gb']:.1f} / {health['disk_total_gb']:.0f} GB", cls="health-value"),
-                Div(f"{health['disk_percent']:.1f}% used", cls="health-detail"),
-                cls="health-item"
-            ),
-            Div(
-                Div("Database", cls="health-label"),
-                Div(f"{health['db_size_mb']:.1f} MB", cls="health-value"),
-                cls="health-item"
-            ),
-            Div("Unable to load system data.", cls="error-message"),
-        )
-
-    cpu = system.get("cpu_percent", 0)
-    temp = system.get("temperature_celsius", 0)
-    disk_used = system.get("disk_used_gb", 0)
-    disk_total = system.get("disk_total_gb", 1)
+    cpu = health.get("cpu_percent", 0)
+    temp = health.get("temperature_celsius", 0)
+    disk_used = health.get("disk_used_gb", 0)
+    disk_total = health.get("disk_total_gb", 1)
     disk_pct = int(disk_used / disk_total * 100) if disk_total > 0 else 0
-    uptime_s = system.get("uptime_seconds", 0)
+    uptime_s = health.get("uptime_seconds", 0)
     uptime_h = uptime_s / 3600
 
     cpu_color = "var(--red)" if cpu > CPU_DANGER else "var(--amber)" if cpu > CPU_WARN else "var(--accent)"
@@ -1371,9 +1354,9 @@ def _system_health_section() -> Div:
         children = [
             Div(label, cls="readout-label"),
             Div(
-                Div("Recordings", cls="health-label"),
-                Div(f"{health['recordings_gb']:.2f} GB", cls="health-value"),
-                cls="health-item"
+                Div(value, cls="readout-value"),
+                Div(unit, cls="readout-unit"),
+                cls="readout-line",
             ),
         ]
         if gauge_pct is not None:
