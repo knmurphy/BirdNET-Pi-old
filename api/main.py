@@ -2,6 +2,10 @@
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+import os
+
 
 from api.routers import detections, species, system, classifiers, settings_router, events, audio, spectrogram
 
@@ -45,3 +49,17 @@ async def root():
 async def health():
     """Health check endpoint."""
     return {"status": "ok"}
+
+
+# Serve React app (must be last to not override API routes)
+dist_dir = os.path.join(os.path.dirname(__file__), '..', 'frontend', 'dist')
+if os.path.exists(dist_dir):
+    app.mount("/assets", StaticFiles(directory=os.path.join(dist_dir, 'assets')), name="assets")
+    
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        """Serve React SPA for all non-API routes."""
+        # API routes are handled by routers above
+        if full_path.startswith('api/'):
+            return None  # Let API routers handle it
+        return FileResponse(os.path.join(dist_dir, 'index.html'))
