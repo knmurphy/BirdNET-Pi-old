@@ -1,7 +1,5 @@
 """Classifier management API endpoints."""
 
-from datetime import datetime
-
 from fastapi import APIRouter, HTTPException
 
 from api.models.classifier import ClassifierConfig, ClassifierToggleResponse
@@ -39,14 +37,14 @@ async def toggle_classifier(classifier_id: str):
     """
     if classifier_id not in CLASSIFIERS:
         raise HTTPException(status_code=404, detail=f"Classifier '{classifier_id}' not found")
-    
+
     classifier = CLASSIFIERS[classifier_id]
     classifier.enabled = not classifier.enabled
-    
+
     # TODO: Persist to config file
-    
+
     status = "enabled" if classifier.enabled else "disabled"
-    
+
     return ClassifierToggleResponse(
         id=classifier_id,
         enabled=classifier.enabled,
