@@ -11,6 +11,7 @@ import sqlite3
 import logging
 import time
 from datetime import datetime
+from urllib.parse import quote as url_quote
 
 from starlette.responses import FileResponse, Response
 from fasthtml.common import (
@@ -53,6 +54,22 @@ def _get_recordings_size_gb() -> float:
     _RECORDINGS_SIZE_CACHE["value"] = result
     _RECORDINGS_SIZE_CACHE["ts"] = now
     return result
+
+# Station display name shown in the header (override via env var)
+STATION_MODEL = os.environ.get("STATION_MODEL", "BirdNET-Pi · RPi 4B")
+
+# Confidence thresholds for visual indicators
+CONF_HIGH = 0.80
+CONF_MEDIUM = 0.50
+
+# System health warning thresholds
+CPU_WARN = 60
+CPU_DANGER = 80
+TEMP_WARN = 55
+TEMP_DANGER = 70
+TEMP_GAUGE_MAX = 85   # Maximum temperature used for gauge scaling (°C)
+DISK_WARN = 70
+DISK_DANGER = 85
 
 
 def get_today_detection_count() -> int:
@@ -197,239 +214,578 @@ def get_system_health() -> dict:
         }
 
 
-# Design System - Dark Theme
+# Design System - Dark Theme (adapted from birdnet-field-station.jsx)
 APP_CSS = """
 :root {
-  /* Color Palette - Dark Theme (default) */
   --bg: #0D0F0B;
   --bg2: #141610;
   --bg3: #1A1D16;
   --border: #252820;
+  --border2: #2E3228;
   --text: #F0EAD2;
   --text2: #9A9B8A;
   --text3: #5A5C4E;
   --accent: #C8E6A0;
+  --accent2: #9FBD73;
   --amber: #E8C547;
+  --amber2: #C4A030;
   --red: #E05252;
-
-  /* Spacing Scale (4px base) */
-  --space-1: 4px;
-  --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
-  --space-5: 20px;
-  --space-6: 24px;
-  --space-8: 32px;
-  --space-10: 40px;
-  --space-12: 48px;
-  --space-16: 64px;
-
-  /* Border Radius */
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --radius-full: 9999px;
-
-  /* Typography */
-  --font-mono: 'DM Mono', monospace;
-  --font-display: 'Fraunces', serif;
+  --font-mono: 'DM Mono', 'Courier New', monospace;
+  --font-display: 'Fraunces', Georgia, serif;
   --font-body: 'Source Serif 4', Georgia, serif;
-
-  /* Shadows */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.5);
 }
 
-/* Reset */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-/* Base styles */
-html { font-size: 16px; }
-body {
-  font-family: var(--font-body);
+html, body {
+  height: 100%;
   background: var(--bg);
   color: var(--text);
+  font-family: var(--font-body);
   line-height: 1.5;
-  min-height: 100dvh;
 }
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
 
-/* App Shell */
+/* ── App Shell ── */
 .app-shell {
   display: flex;
   flex-direction: column;
+  max-width: 430px;
+  margin: 0 auto;
   min-height: 100dvh;
+  position: relative;
 }
 
-/* Topbar / Header */
+/* ── Header ── */
 .topbar {
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px 12px;
+  position: relative;
+  z-index: 10;
+}
+.header-left { display: flex; align-items: center; gap: 10px; }
+.station-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--amber);
+  box-shadow: 0 0 6px var(--amber);
+  animation: pulse-amber 2s ease-in-out infinite;
+  flex-shrink: 0;
+}
+@keyframes pulse-amber {
+  0%, 100% { opacity: 1; box-shadow: 0 0 6px var(--amber); }
+  50% { opacity: 0.4; box-shadow: 0 0 2px var(--amber); }
+}
+.station-name {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text2);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  line-height: 1.3;
+}
+.station-id {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text3);
+  letter-spacing: 0.08em;
+}
+.header-time {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--amber);
+  letter-spacing: 0.06em;
+}
+
+/* ── Main content area ── */
+#content {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding-bottom: 64px;
+}
+#content::-webkit-scrollbar { display: none; }
+
+/* ── Bottom Navigation ── */
+.bottom-nav {
+  display: flex;
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 430px;
+  z-index: 100;
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+}
+.bottom-nav a {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 10px 0 12px;
+  color: var(--text3);
+  text-decoration: none;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  transition: color 0.15s;
+  position: relative;
+}
+.bottom-nav a::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 20%; right: 20%;
+  height: 1px;
+  background: transparent;
+  transition: background 0.15s;
+}
+.bottom-nav a:hover { color: var(--text2); text-decoration: none; }
+.bottom-nav a.active { color: var(--accent); }
+.bottom-nav a.active::before { background: var(--accent); }
+.nav-icon { font-size: 14px; line-height: 1; }
+
+/* ── Summary strip ── */
+.summary-strip {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+}
+.sum-cell {
+  flex: 1;
+  padding: 10px 8px;
+  border-right: 1px solid var(--border);
+  text-align: center;
+}
+.sum-cell:last-child { border-right: none; }
+.sum-val {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 400;
+  color: var(--text);
+  display: block;
+  line-height: 1;
+  margin-bottom: 3px;
+}
+.sum-label {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  color: var(--text3);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  display: block;
+}
+
+/* ── Section label ── */
+.section-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 10px 16px 6px;
+  border-bottom: 1px solid var(--border);
+}
+.section-label-title {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text3);
+}
+.section-label-meta {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--text3);
+}
+
+/* ── Spectrogram placeholder ── */
+.spectrogram-wrapper {
+  height: 80px;
   background: var(--bg2);
   border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-4);
+  justify-content: center;
+  position: relative;
+}
+.spec-label {
   font-family: var(--font-mono);
-  font-size: 12px;
-}
-
-/* Main content area */
-#content {
-  flex: 1;
-  overflow-y: auto;
-  padding: var(--space-4);
-}
-
-/* Bottom navigation (mobile) */
-.bottom-nav {
-  display: none;
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  z-index: 100;
-  background: var(--bg2);
-  border-top: 1px solid var(--border);
-  justify-content: space-around;
-  padding: var(--space-2) 0;
-}
-.bottom-nav a {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: var(--space-2) var(--space-1);
-  font-size: 11px;
-  font-family: var(--font-mono);
-  color: var(--text2);
-  text-decoration: none;
-  flex: 1;
-  transition: color var(--transition-fast, 150ms ease);
-}
-.bottom-nav a:hover, .bottom-nav a.active {
-  color: var(--accent);
-}
-
-/* Widget grid */
-.widget-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: var(--space-3);
-  margin-bottom: var(--space-4);
-}
-
-/* Widget cards */
-.widget {
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  padding: var(--space-4);
-  box-shadow: var(--shadow-sm);
-}
-.widget:hover {
-  box-shadow: var(--shadow-md);
-}
-.widget-label {
-  font-size: 11px;
+  font-size: 9px;
+  color: var(--text3);
+  letter-spacing: 0.15em;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--text2);
-  font-family: var(--font-mono);
-  margin-bottom: var(--space-2);
-}
-.widget-value {
-  font-size: 28px;
-  font-weight: bold;
-  color: var(--accent);
-  font-family: var(--font-display);
 }
 
-/* Confidence color coding */
+/* ── Detection card (most recent) ── */
+.det-card {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  position: relative;
+}
+.det-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--text3);
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.det-comname {
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 400;
+  color: var(--text);
+  line-height: 1.1;
+  margin-bottom: 2px;
+}
+.det-sciname {
+  font-family: var(--font-body);
+  font-style: italic;
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--text2);
+  margin-bottom: 10px;
+}
+.det-timestamp {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text3);
+  position: absolute;
+  top: 14px; right: 16px;
+}
+.conf-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.conf-bar-track {
+  flex: 1;
+  height: 2px;
+  background: var(--border2);
+  position: relative;
+}
+.conf-bar-fill {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  transition: width 0.4s ease;
+}
+.conf-pct {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  min-width: 36px;
+  text-align: right;
+}
+.audio-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.audio-filename {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--text3);
+  letter-spacing: 0.04em;
+}
+
+/* ── Detection list rows ── */
+.det-row {
+  display: flex;
+  align-items: center;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  gap: 10px;
+  transition: background 0.1s;
+}
+.det-row:hover { background: var(--bg2); }
+.det-row-body { flex: 1; min-width: 0; }
+.det-row-name {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 400;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.det-row-sci {
+  font-family: var(--font-body);
+  font-style: italic;
+  font-size: 11px;
+  font-weight: 300;
+  color: var(--text3);
+}
+.det-row-conf {
+  width: 32px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-align: right;
+  flex-shrink: 0;
+}
+.det-row-time {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text3);
+  flex-shrink: 0;
+}
+.conf-dot {
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* ── Confidence color coding ── */
 .conf-high { color: var(--accent); }
 .conf-medium { color: var(--amber); }
 .conf-low { color: var(--red); }
 
-/* Hourly activity chart */
-.hourly-chart {
-  margin-bottom: var(--space-4);
+/* ── Activity chart ── */
+.activity-chart {
+  padding: 12px 16px 14px;
+  border-bottom: 1px solid var(--border);
 }
-.hourly-bar-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  margin-bottom: var(--space-1);
+.chart-title {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 9px;
+  color: var(--text3);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+  display: flex;
+  justify-content: space-between;
 }
-.hourly-label {
-  width: 40px;
-  color: var(--text2);
-  text-align: right;
-  flex-shrink: 0;
+.chart-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 56px;
 }
-.hourly-bar-container {
+.chart-bar-wrap {
   flex: 1;
-  height: 16px;
-  background: var(--bg3);
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-}
-.hourly-bar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
   height: 100%;
-  background: var(--accent);
-  border-radius: var(--radius-sm);
-  transition: width 0.3s ease;
+  justify-content: flex-end;
 }
-.hourly-count {
-  width: 40px;
-  color: var(--text);
-  text-align: right;
-  flex-shrink: 0;
+.chart-bar {
+  width: 100%;
+  background: var(--border2);
+  min-height: 2px;
+}
+.chart-bar.active { background: var(--accent2); }
+.chart-bar.current { background: var(--amber); }
+.chart-hour {
+  font-family: var(--font-mono);
+  font-size: 7px;
+  color: var(--text3);
 }
 
-/* System health section */
-.health-grid {
+/* ── Species grid ── */
+.species-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: var(--space-3);
-  margin-top: var(--space-4);
+  grid-template-columns: 1fr 1fr;
 }
-.health-item {
-  background: var(--bg3);
-  padding: var(--space-3);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border);
+.species-card {
+  padding: 14px;
+  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  transition: background 0.1s;
 }
-.health-label {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--text2);
+.species-card:nth-child(2n) { border-right: none; }
+.species-card:hover { background: var(--bg2); }
+.sp-count {
   font-family: var(--font-mono);
-  margin-bottom: var(--space-1);
+  font-size: 22px;
+  color: var(--accent);
+  line-height: 1;
+  margin-bottom: 4px;
 }
-.health-value {
-  font-size: 18px;
-  font-weight: bold;
+.sp-name {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text);
+  line-height: 1.2;
+  margin-bottom: 2px;
+}
+.sp-sci {
+  font-family: var(--font-body);
+  font-style: italic;
+  font-size: 10px;
+  font-weight: 300;
+  color: var(--text3);
+  margin-bottom: 6px;
+}
+.sp-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.sp-last {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--text3);
+}
+.trend-up { color: var(--accent); font-size: 11px; }
+.trend-down { color: var(--red); font-size: 11px; }
+.trend-stable { color: var(--text3); font-size: 11px; }
+
+/* ── Widget (legacy, kept for tests) ── */
+.widget {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  padding: 12px 14px;
+}
+.widget-label {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text3);
+  font-family: var(--font-mono);
+  margin-bottom: 4px;
+}
+.widget-value {
+  font-size: 24px;
+  font-weight: 400;
   color: var(--accent);
   font-family: var(--font-display);
 }
-.health-detail {
-  font-size: 11px;
+
+/* ── Readout grid (stats) ── */
+.stat-block {
+  padding: 0 0 4px;
+  border-bottom: 1px solid var(--border);
+}
+.stat-block-title {
+  font-family: var(--font-mono);
+  font-size: 9px;
   color: var(--text3);
-  margin-top: var(--space-1);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  padding: 10px 16px 8px;
+}
+.readout-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  padding: 0 16px 14px;
+}
+.readout { display: flex; flex-direction: column; gap: 2px; }
+.readout-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--text3);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.readout-value {
+  font-family: var(--font-mono);
+  font-size: 20px;
+  color: var(--text);
+  line-height: 1;
+}
+.readout-value.accent { color: var(--accent); }
+.readout-value.amber { color: var(--amber); }
+.readout-value.danger { color: var(--red); }
+.readout-unit {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text3);
+}
+.gauge-row { margin-top: 3px; }
+.gauge-track {
+  width: 100%;
+  height: 2px;
+  background: var(--border2);
+  position: relative;
+}
+.gauge-fill {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
 }
 
-/* Error state */
+/* ── Services ── */
+.service-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.service-name {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text2);
+  letter-spacing: 0.04em;
+}
+.service-status {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.status-dot { width: 5px; height: 5px; border-radius: 50%; }
+.status-ok { color: var(--accent2); }
+.status-ok .status-dot { background: var(--accent2); }
+.status-warn { color: var(--amber); }
+.status-warn .status-dot { background: var(--amber); }
+
+/* ── Health grid (legacy, kept for tests) ── */
+.health-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+}
+.health-item {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+}
+.health-item:nth-child(2n) { border-right: none; }
+.health-label {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text3);
+  font-family: var(--font-mono);
+  margin-bottom: 4px;
+}
+.health-value {
+  font-size: 16px;
+  font-weight: 400;
+  color: var(--accent);
+  font-family: var(--font-mono);
+}
+.health-detail {
+  font-size: 10px;
+  color: var(--text3);
+  font-family: var(--font-mono);
+  margin-top: 2px;
+}
+
+/* ── Error state ── */
 .error-message {
   color: var(--red);
   font-family: var(--font-mono);
-  font-size: 12px;
-  padding: var(--space-3);
+  font-size: 11px;
+  padding: 10px 16px;
   background: var(--bg3);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--red);
+  border-bottom: 1px solid var(--red);
+  border-left: 2px solid var(--red);
+  margin: 12px 16px;
 }
 
 /* Live status indicator */
@@ -672,16 +1028,22 @@ def _shell(content, current_path: str = "/app/dashboard"):
     current_time = datetime.now().strftime("%H:%M:%S")
 
     tabs = [
-        ("Dashboard", "/app/dashboard"),
-        ("Detections", "/app/detections"),
-        ("Species", "/app/species"),
-        ("Stats", "/app/stats"),
-        ("Settings", "/app/settings"),
+        ("⬤", "LIVE", "/app/dashboard", "Dashboard – Live view"),
+        ("☰", "LOG", "/app/detections", "Detection log"),
+        ("◈", "SPECIES", "/app/species", "Species catalog"),
+        ("∿", "STATS", "/app/stats", "Statistics"),
+        ("⚙", "CONFIG", "/app/settings", "Configuration"),
     ]
 
     nav_links = [
-        A(name, href=path, cls="active" if current_path == path else "")
-        for name, path in tabs
+        A(
+            Span(icon, cls="nav-icon", aria_hidden="true"),
+            label,
+            href=path,
+            cls="active" if current_path == path else "",
+            aria_label=aria_label,
+        )
+        for icon, label, path, aria_label in tabs
     ]
 
     # Safely inject the API URL into the SSE JavaScript via JSON encoding
@@ -691,6 +1053,7 @@ def _shell(content, current_path: str = "/app/dashboard"):
         Head(
             Meta(charset="utf-8"),
             Meta(name="viewport", content="width=device-width, initial-scale=1"),
+            Meta(name="theme-color", content="#0D0F0B"),
             Link(rel="preconnect", href="https://fonts.googleapis.com"),
             Link(rel="preconnect", href="https://fonts.gstatic.com", crossorigin=""),
             Link(
@@ -710,15 +1073,25 @@ def _shell(content, current_path: str = "/app/dashboard"):
         Body(
             Div(
                 Header(
-                    f"Field Station - {current_time}",
+                    Div(
+                        Div(cls="station-dot"),
+                        Div(
+                            Div("FIELD STATION", cls="station-name"),
+                            Div(STATION_MODEL, cls="station-id"),
+                        ),
+                        cls="header-left",
+                    ),
+                    Div(current_time, cls="header-time", id="clock"),
                     cls="topbar",
                 ),
                 Main(content, id="content"),
-                Nav(*nav_links, cls="bottom-nav"),
+                Nav(*nav_links, cls="bottom-nav", aria_label="Main navigation"),
                 cls="app-shell",
             ),
             Script(live_js),
         ),
+        Div(*bars, cls="chart-bars"),
+        cls="activity-chart",
     )
 
 
@@ -730,12 +1103,22 @@ def detections():
 
 def _confidence_class(confidence: float) -> str:
     """Return the appropriate confidence color class."""
-    if confidence >= 0.80:
+    if confidence >= CONF_HIGH:
         return "conf-high"
-    elif confidence >= 0.50:
+    elif confidence >= CONF_MEDIUM:
         return "conf-medium"
     else:
         return "conf-low"
+
+
+def _conf_dot_color(confidence: float) -> str:
+    """Return dot color for confidence level."""
+    if confidence >= CONF_HIGH:
+        return "var(--accent2)"
+    elif confidence >= CONF_MEDIUM:
+        return "var(--amber2)"
+    else:
+        return "var(--red)"
 
 
 def _detections_content():
@@ -851,19 +1234,21 @@ def _hourly_activity_section() -> Div:
         bar_width = (count / max_count * 100) if max_count > 0 else 0
         bar_rows.append(
             Div(
-                Div(f"{hour:02d}:00", cls="hourly-label"),
-                Div(
-                    Div(cls="hourly-bar", style=f"width: {bar_width:.1f}%"),
-                    cls="hourly-bar-container"
-                ),
-                Div(str(count), cls="hourly-count"),
-                cls="hourly-bar-row"
-            )
+                Div("Today's Activity", cls="section-label-title"),
+                cls="section-label",
+            ),
+            Div(
+                "No detections yet today.",
+                style="font-family:var(--font-mono);font-size:11px;color:var(--text3);padding:16px;",
+            ),
         )
 
     return Div(
-        H3("Today's Activity"),
-        Div(*bar_rows, cls="hourly-chart"),
+        Div(
+            Div("Today's Activity", cls="section-label-title"),
+            cls="section-label",
+        ),
+        chart,
     )
 
 
@@ -885,12 +1270,52 @@ def _system_health_section() -> Div:
                 Div(f"{health['db_size_mb']:.1f} MB", cls="health-value"),
                 cls="health-item"
             ),
+            Div("Unable to load system data.", cls="error-message"),
+        )
+
+    cpu = system.get("cpu_percent", 0)
+    temp = system.get("temperature_celsius", 0)
+    disk_used = system.get("disk_used_gb", 0)
+    disk_total = system.get("disk_total_gb", 1)
+    disk_pct = int(disk_used / disk_total * 100) if disk_total > 0 else 0
+    uptime_s = system.get("uptime_seconds", 0)
+    uptime_h = uptime_s / 3600
+
+    cpu_color = "var(--red)" if cpu > CPU_DANGER else "var(--amber)" if cpu > CPU_WARN else "var(--accent)"
+    temp_color = "var(--red)" if temp > TEMP_DANGER else "var(--amber)" if temp > TEMP_WARN else "var(--text)"
+    disk_color = "var(--red)" if disk_pct > DISK_DANGER else "var(--amber)" if disk_pct > DISK_WARN else "var(--accent)"
+
+    def readout(label, value, unit="", gauge_pct=None, color="var(--text)"):
+        children = [
+            Div(label, cls="readout-label"),
             Div(
                 Div("Recordings", cls="health-label"),
                 Div(f"{health['recordings_gb']:.2f} GB", cls="health-value"),
                 cls="health-item"
             ),
-            cls="health-grid"
+        ]
+        if gauge_pct is not None:
+            children.append(
+                Div(
+                    Div(cls="gauge-fill", style=f"width:{gauge_pct}%;background:{color}"),
+                    cls="gauge-track",
+                    style="margin-top:4px;",
+                )
+            )
+        return Div(*children, cls="readout")
+
+    return Div(
+        Div(
+            Div("System Health", cls="section-label-title"),
+            cls="section-label",
+        ),
+        Div(
+            readout("CPU Load", f"{cpu:.0f}", "%", int(cpu), cpu_color),
+            readout("Temperature", f"{temp:.1f}", "°C", int(temp / TEMP_GAUGE_MAX * 100), temp_color),
+            readout("Disk Usage", f"{disk_used:.1f}/{disk_total:.0f}", "GB", disk_pct, disk_color),
+            readout("Uptime", f"{uptime_h:.1f}", "h"),
+            cls="readout-grid",
+            style="padding: 12px 16px 14px;",
         ),
         id="system-health",
         **SYSTEM_HEALTH_POLL,
