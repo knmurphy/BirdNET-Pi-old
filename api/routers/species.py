@@ -4,7 +4,7 @@ from datetime import date, datetime
 
 from fastapi import APIRouter, HTTPException
 
-from api.services.database import get_duckdb_connection
+from api.services.database import get_connection
 from api.models.species import SpeciesSummary, SpeciesTodayResponse
 
 router = APIRouter()
@@ -16,21 +16,23 @@ async def get_species_today():
     today = date.today().isoformat()
     
     try:
-        conn = get_duckdb_connection(read_only=True)
+        conn = get_connection()
+        cursor = conn.cursor()
         
         # Get all species with aggregations
-        species_rows = conn.execute("""
+        cursor.execute("""
             SELECT
-                com_name,
-                sci_name,
+                Com_Name,
+                Sci_Name,
                 COUNT(*) as detection_count,
-                MAX(confidence) as max_confidence,
-                MAX(time) as last_seen
+                MAX(Confidence) as max_confidence,
+                MAX(Time) as last_seen
             FROM detections
-            WHERE date = ?
-            GROUP BY com_name, sci_name
+            WHERE Date = ?
+            GROUP BY Com_Name, Sci_Name
             ORDER BY detection_count DESC
-        """, [today]).fetchall()
+        """, [today])
+        species_rows = cursor.fetchall()
         
         species_list = []
         
@@ -38,23 +40,18 @@ async def get_species_today():
             com_name, sci_name, detection_count, max_confidence, last_seen = row
             
             # Get hourly counts for this species
-            hourly_rows = conn.execute("""
-                SELECT EXTRACT(HOUR FROM time) as hour, COUNT(*) as count
+            cursor.execute("""
+                SELECT CAST(substr(Time, 1, 2) AS INTEGER) as hour, COUNT(*) as count
                 FROM detections 
-                WHERE date = ? AND com_name = ?
+                WHERE Date = ? AND Com_Name = ?
                 GROUP BY hour
-            """, [today, com_name]).fetchall()
-            # Use SUBSTRING since time is stored as "HH:MM:SS" not a timestamp
-            hourly_rows = conn.execute("""
-                SELECT CAST(SUBSTRING(time, 1, 2) AS INTEGER) as hour, COUNT(*) as count
-                FROM detections 
-                WHERE date = ? AND com_name = ?
-                GROUP BY hour
-            """, [today, com_name]).fetchall()
+            """, [today, com_name])
+            hourly_rows = cursor.fetchall()
             
             hourly_counts = [0] * 24
             for hour, count in hourly_rows:
-                hourly_counts[hour] = count
+                if hour is not None and 0 <= hour < 24:
+                    hourly_counts[hour] = count
             
             species_list.append(SpeciesSummary(
                 com_name=com_name,

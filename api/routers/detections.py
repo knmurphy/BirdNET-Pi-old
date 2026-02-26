@@ -4,7 +4,7 @@ from datetime import date, datetime
 
 from fastapi import APIRouter, HTTPException
 
-from api.services.database import get_duckdb_connection
+from api.services.database import get_connection
 from api.models.detection import TodaySummaryResponse, TopSpecies
 
 router = APIRouter()
@@ -19,27 +19,31 @@ async def get_today_summary():
     today = date.today().isoformat()
     
     try:
-        conn = get_duckdb_connection(read_only=True)
+        conn = get_connection()
+        cursor = conn.cursor()
         
         # Total detections today
-        total = conn.execute(
-            "SELECT COUNT(*) FROM detections WHERE date = ?", [today]
-        ).fetchone()[0]
+        cursor.execute(
+            "SELECT COUNT(*) FROM detections WHERE Date = ?", [today]
+        )
+        total = cursor.fetchone()[0]
         
         # Species count today
-        species_count = conn.execute(
-            "SELECT COUNT(DISTINCT com_name) FROM detections WHERE date = ?", [today]
-        ).fetchone()[0]
+        cursor.execute(
+            "SELECT COUNT(DISTINCT Com_Name) FROM detections WHERE Date = ?", [today]
+        )
+        species_count = cursor.fetchone()[0]
         
         # Top 5 species
-        top_species_rows = conn.execute("""
-            SELECT com_name, COUNT(*) as count
+        cursor.execute("""
+            SELECT Com_Name, COUNT(*) as count
             FROM detections 
-            WHERE date = ?
-            GROUP BY com_name
+            WHERE Date = ?
+            GROUP BY Com_Name
             ORDER BY count DESC 
             LIMIT 5
-        """, [today]).fetchall()
+        """, [today])
+        top_species_rows = cursor.fetchall()
         
         top_species = [
             TopSpecies(com_name=row[0], count=row[1])
@@ -47,23 +51,19 @@ async def get_today_summary():
         ]
         
         # Hourly counts (24-element array)
-        hourly_rows = conn.execute("""
-            SELECT EXTRACT(HOUR FROM time) as hour, COUNT(*) as count
+        # SQLite uses substr() to extract characters
+        cursor.execute("""
+            SELECT CAST(substr(Time, 1, 2) AS INTEGER) as hour, COUNT(*) as count
             FROM detections 
-            WHERE date = ?
+            WHERE Date = ?
             GROUP BY hour
-        """, [today]).fetchall()
-        # Use SUBSTRING since time is stored as "HH:MM:SS" not a timestamp
-        hourly_rows = conn.execute("""
-            SELECT CAST(SUBSTRING(time, 1, 2) AS INTEGER) as hour, COUNT(*) as count
-            FROM detections 
-            WHERE date = ?
-            GROUP BY hour
-        """, [today]).fetchall()
+        """, [today])
+        hourly_rows = cursor.fetchall()
         
         hourly_counts = [0] * 24
         for hour, count in hourly_rows:
-            hourly_counts[hour] = count
+            if hour is not None and 0 <= hour < 24:
+                hourly_counts[hour] = count
         
         conn.close()
         
