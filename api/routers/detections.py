@@ -1,6 +1,6 @@
 """Detection-related API endpoints."""
 
-from datetime import date, datetime
+from datetime import datetime as date_type
 from typing import Optional
 import itertools
 
@@ -26,7 +26,7 @@ class DetectionsResponse(BaseModel):
 
 @router.get("/detections", response_model=DetectionsResponse)
 async def get_detections(
-    date: Optional[str] = Query(None, description="Filter by date (YYYY-MM-DD)"),
+    date_param: Optional[str] = Query(None, description="Filter by date (YYYY-MM-DD or 'today')"),
     classifier: Optional[str] = Query(None, description="Filter by classifier name"),
     min_confidence: Optional[float] = Query(None, ge=0.0, le=1.0, description="Minimum confidence threshold"),
     species: Optional[str] = Query(None, description="Filter by species name (common name)"),
@@ -50,9 +50,13 @@ async def get_detections(
         conditions = []
         params = []
         
-        if date:
+        if date_param:
             conditions.append("Date = ?")
-            params.append(date)
+            # Resolve "today" to current date
+            if date_param.lower() == "today":
+                params.append(date_type.today().isoformat())
+            else:
+                params.append(date_param)
         
         # Note: classifier column doesn't exist in SQLite schema yet
         # This filter will be ignored for now until DuckDB migration
