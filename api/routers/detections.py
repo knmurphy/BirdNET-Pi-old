@@ -47,6 +47,12 @@ async def get_today_summary():
         ]
         
         # Hourly counts (24-element array)
+        hourly_rows = conn.execute("""
+            SELECT EXTRACT(HOUR FROM time) as hour, COUNT(*) as count
+            FROM detections 
+            WHERE date = ?
+            GROUP BY hour
+        """, [today]).fetchall()
         # Use SUBSTRING since time is stored as "HH:MM:SS" not a timestamp
         hourly_rows = conn.execute("""
             SELECT CAST(SUBSTRING(time, 1, 2) AS INTEGER) as hour, COUNT(*) as count

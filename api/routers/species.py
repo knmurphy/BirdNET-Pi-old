@@ -38,6 +38,12 @@ async def get_species_today():
             com_name, sci_name, detection_count, max_confidence, last_seen = row
             
             # Get hourly counts for this species
+            hourly_rows = conn.execute("""
+                SELECT EXTRACT(HOUR FROM time) as hour, COUNT(*) as count
+                FROM detections 
+                WHERE date = ? AND com_name = ?
+                GROUP BY hour
+            """, [today, com_name]).fetchall()
             # Use SUBSTRING since time is stored as "HH:MM:SS" not a timestamp
             hourly_rows = conn.execute("""
                 SELECT CAST(SUBSTRING(time, 1, 2) AS INTEGER) as hour, COUNT(*) as count
