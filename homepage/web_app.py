@@ -7,6 +7,7 @@ Built with FastHTML for HTMX-based navigation (no iframe, no full page reload).
 Following TDD: This code is written to pass tests, then refactored.
 """
 import os
+import shutil
 import sqlite3
 import logging
 from datetime import date, datetime
@@ -15,7 +16,7 @@ from fasthtml.common import (
     FastHTML, serve,
     Html, Head, Body, Title, Meta, Link, Style,
     Main, Nav, Header,
-    Div, H2, P, A, Audio,
+    Div, H2, H3, P, A, Audio,
 )
 
 # Database configuration
@@ -175,6 +176,77 @@ a:hover { text-decoration: underline; }
 .conf-medium { color: var(--amber); }
 .conf-low { color: var(--red); }
 
+/* Hourly activity chart */
+.hourly-chart {
+  margin-bottom: var(--space-4);
+}
+.hourly-bar-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-1);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.hourly-label {
+  width: 40px;
+  color: var(--text2);
+  text-align: right;
+  flex-shrink: 0;
+}
+.hourly-bar-container {
+  flex: 1;
+  height: 16px;
+  background: var(--bg3);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.hourly-bar {
+  height: 100%;
+  background: var(--accent);
+  border-radius: var(--radius-sm);
+  transition: width 0.3s ease;
+}
+.hourly-count {
+  width: 40px;
+  color: var(--text);
+  text-align: right;
+  flex-shrink: 0;
+}
+
+/* System health section */
+.health-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+.health-item {
+  background: var(--bg3);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+}
+.health-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text2);
+  font-family: var(--font-mono);
+  margin-bottom: var(--space-1);
+}
+.health-value {
+  font-size: 18px;
+  font-weight: bold;
+  color: var(--accent);
+  font-family: var(--font-display);
+}
+.health-detail {
+  font-size: 11px;
+  color: var(--text3);
+  margin-top: var(--space-1);
+}
+
 /* Responsive */
 @media (max-width: 640px) {
   .bottom-nav { display: flex; }
@@ -331,10 +403,6 @@ Head(
     )
 
 
-if __name__ == "__main__":
-    serve(port=8502)
-
-
 @app.get("/app/detections")
 def detections():
     """Render the detections page."""
@@ -444,6 +512,120 @@ def get_total_species_count() -> int:
         return 0
 
 
+def get_hourly_detections() -> dict:
+    """Get count of detections per hour for today."""
+    today = date.today().isoformat()
+    try:
+        con = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
+        cursor = con.execute(
+            "SELECT CAST(SUBSTR(Time, 1, 2) AS INTEGER) as hour, COUNT(*) "
+            "FROM detections WHERE Date = ? GROUP BY hour",
+            (today,)
+        )
+        rows = cursor.fetchall()
+        con.close()
+        return {int(row[0]): row[1] for row in rows}
+    except Exception as e:
+        logging.error(f"Error getting hourly detections: {e}")
+        return {}
+
+
+def get_system_health() -> dict:
+    """Get system health metrics from filesystem."""
+    try:
+        db_size_mb = os.path.getsize(DB_PATH) / (1024 * 1024) if os.path.exists(DB_PATH) else 0.0
+    except Exception:
+        db_size_mb = 0.0
+
+    audio_path = os.path.join(os.path.expanduser("~"), "BirdSongs")
+    try:
+        recordings_bytes = sum(
+            os.path.getsize(os.path.join(dp, f))
+            for dp, _, filenames in os.walk(audio_path)
+            for f in filenames
+        ) if os.path.exists(audio_path) else 0
+        recordings_gb = recordings_bytes / (1024 ** 3)
+    except Exception:
+        recordings_gb = 0.0
+
+    try:
+        usage = shutil.disk_usage(os.path.expanduser("~"))
+        disk_total_gb = usage.total / (1024 ** 3)
+        disk_used_gb = usage.used / (1024 ** 3)
+        disk_percent = (usage.used / usage.total) * 100
+    except Exception:
+        disk_total_gb = disk_used_gb = disk_percent = 0.0
+
+    return {
+        'disk_used_gb': disk_used_gb,
+        'disk_total_gb': disk_total_gb,
+        'disk_percent': disk_percent,
+        'db_size_mb': db_size_mb,
+        'recordings_gb': recordings_gb,
+    }
+
+
+def _hourly_activity_section() -> Div:
+    """Generate hourly activity bar chart for today."""
+    hourly = get_hourly_detections()
+
+    if not hourly:
+        return Div(
+            H3("Today's Activity"),
+            P("No detections yet today."),
+            cls="hourly-chart"
+        )
+
+    max_count = max(hourly.values())
+    bar_rows = []
+    for hour in range(24):
+        count = hourly.get(hour, 0)
+        bar_width = (count / max_count * 100) if max_count > 0 else 0
+        bar_rows.append(
+            Div(
+                Div(f"{hour:02d}:00", cls="hourly-label"),
+                Div(
+                    Div(cls="hourly-bar", style=f"width: {bar_width:.1f}%"),
+                    cls="hourly-bar-container"
+                ),
+                Div(str(count), cls="hourly-count"),
+                cls="hourly-bar-row"
+            )
+        )
+
+    return Div(
+        H3("Today's Activity"),
+        Div(*bar_rows, cls="hourly-chart"),
+    )
+
+
+def _system_health_section() -> Div:
+    """Generate system health widgets."""
+    health = get_system_health()
+
+    return Div(
+        H3("System Health"),
+        Div(
+            Div(
+                Div("Disk Usage", cls="health-label"),
+                Div(f"{health['disk_used_gb']:.1f} / {health['disk_total_gb']:.0f} GB", cls="health-value"),
+                Div(f"{health['disk_percent']:.1f}% used", cls="health-detail"),
+                cls="health-item"
+            ),
+            Div(
+                Div("Database", cls="health-label"),
+                Div(f"{health['db_size_mb']:.1f} MB", cls="health-value"),
+                cls="health-item"
+            ),
+            Div(
+                Div("Recordings", cls="health-label"),
+                Div(f"{health['recordings_gb']:.2f} GB", cls="health-value"),
+                cls="health-item"
+            ),
+            cls="health-grid"
+        ),
+    )
+
 
 @app.get("/app/stats")
 def stats():
@@ -459,16 +641,20 @@ def _stats_content():
     return Div(
         H2("Statistics"),
         Div(
-            Div("Total Detections", cls="widget-label"),
-            Div(f"{total_detections:,}", cls="widget-value"),
-            cls="widget"
+            Div(
+                Div("Total Detections", cls="widget-label"),
+                Div(f"{total_detections:,}", cls="widget-value"),
+                cls="widget"
+            ),
+            Div(
+                Div("Total Species", cls="widget-label"),
+                Div(f"{total_species:,}", cls="widget-value"),
+                cls="widget"
+            ),
+            cls="widget-grid"
         ),
-        Div(
-            Div("Total Species", cls="widget-label"),
-            Div(f"{total_species:,}", cls="widget-value"),
-            cls="widget"
-        ),
-        cls="widget-grid"
+        _hourly_activity_section(),
+        _system_health_section(),
     )
 
 @app.get("/app/settings")
@@ -483,3 +669,7 @@ def _settings_content():
         H2("Settings"),
         P("System configuration coming soon..."),
     )
+
+
+if __name__ == "__main__":
+    serve(port=8502)

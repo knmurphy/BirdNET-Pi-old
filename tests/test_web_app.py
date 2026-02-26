@@ -4,6 +4,7 @@ Tests for Field Station OS FastHTML web application.
 Following TDD: Write the test first, watch it fail, write minimal code to pass.
 """
 import pytest
+import sqlite3
 from unittest.mock import patch
 from fasthtml.common import FastHTML
 
@@ -235,48 +236,144 @@ class TestSettingsRoute:
 
 
 class TestDatabaseErrorPaths:
-    """Test that database functions return safe defaults when the DB is unavailable."""
+    """Test graceful degradation when database is unavailable or malformed."""
 
-    def test_get_today_detection_count_returns_zero_on_error(self):
-        """Should return 0 when the database cannot be reached."""
+    @patch('homepage.web_app.sqlite3.connect')
+    def test_get_today_detection_count_returns_zero_on_error(self, mock_connect):
+        """Should return 0 when database is unavailable."""
+        mock_connect.side_effect = sqlite3.Error("Database unavailable")
         from homepage.web_app import get_today_detection_count
-        with patch("homepage.web_app.sqlite3.connect", side_effect=Exception("DB error")):
-            assert get_today_detection_count() == 0
+        count = get_today_detection_count()
+        assert count == 0
 
-    def test_get_today_species_count_returns_zero_on_error(self):
-        """Should return 0 when the database cannot be reached."""
+    @patch('homepage.web_app.sqlite3.connect')
+    def test_get_today_species_count_returns_zero_on_error(self, mock_connect):
+        """Should return 0 when database is unavailable."""
+        mock_connect.side_effect = sqlite3.Error("Database unavailable")
         from homepage.web_app import get_today_species_count
-        with patch("homepage.web_app.sqlite3.connect", side_effect=Exception("DB error")):
-            assert get_today_species_count() == 0
+        count = get_today_species_count()
+        assert count == 0
 
-    def test_get_latest_detection_returns_none_on_error(self):
-        """Should return None when the database cannot be reached."""
+    @patch('homepage.web_app.sqlite3.connect')
+    def test_get_latest_detection_returns_none_on_error(self, mock_connect):
+        """Should return None when database is unavailable."""
+        mock_connect.side_effect = sqlite3.Error("Database unavailable")
         from homepage.web_app import get_latest_detection
-        with patch("homepage.web_app.sqlite3.connect", side_effect=Exception("DB error")):
-            assert get_latest_detection() is None
+        result = get_latest_detection()
+        assert result is None
 
-    def test_get_total_detection_count_returns_zero_on_error(self):
-        """Should return 0 when the database cannot be reached."""
+    @patch('homepage.web_app.sqlite3.connect')
+    def test_get_total_detection_count_returns_zero_on_error(self, mock_connect):
+        """Should return 0 when database is unavailable."""
+        mock_connect.side_effect = sqlite3.Error("Database unavailable")
         from homepage.web_app import get_total_detection_count
-        with patch("homepage.web_app.sqlite3.connect", side_effect=Exception("DB error")):
-            assert get_total_detection_count() == 0
+        count = get_total_detection_count()
+        assert count == 0
 
-    def test_get_total_species_count_returns_zero_on_error(self):
-        """Should return 0 when the database cannot be reached."""
+    @patch('homepage.web_app.sqlite3.connect')
+    def test_get_total_species_count_returns_zero_on_error(self, mock_connect):
+        """Should return 0 when database is unavailable."""
+        mock_connect.side_effect = sqlite3.Error("Database unavailable")
         from homepage.web_app import get_total_species_count
-        with patch("homepage.web_app.sqlite3.connect", side_effect=Exception("DB error")):
-            assert get_total_species_count() == 0
+        count = get_total_species_count()
+        assert count == 0
 
-    def test_detections_content_shows_error_message_on_db_failure(self):
-        """Detections content should show a fallback message when the DB fails."""
+    @patch('homepage.web_app.sqlite3.connect')
+    def test_detections_content_returns_error_div_on_error(self, mock_connect):
+        """Should return Div with error message when database is unavailable."""
+        mock_connect.side_effect = sqlite3.Error("Database unavailable")
         from homepage.web_app import _detections_content
-        with patch("homepage.web_app.sqlite3.connect", side_effect=Exception("DB error")):
-            content = str(_detections_content())
+        content = str(_detections_content())
+        assert "<h2>Today's Detections</h2>" in content
         assert "Unable to load detections" in content
 
-    def test_species_content_shows_error_message_on_db_failure(self):
-        """Species content should show a fallback message when the DB fails."""
+    @patch('homepage.web_app.sqlite3.connect')
+    def test_species_content_returns_error_div_on_error(self, mock_connect):
+        """Should return Div with error message when database is unavailable."""
+        mock_connect.side_effect = sqlite3.Error("Database unavailable")
         from homepage.web_app import _species_content
-        with patch("homepage.web_app.sqlite3.connect", side_effect=Exception("DB error")):
-            content = str(_species_content())
+        content = str(_species_content())
+        assert "<h2>Today's Species</h2>" in content
         assert "Error loading species" in content
+
+
+class TestHourlyActivity:
+    """Test hourly activity chart functionality."""
+
+    def test_get_hourly_detections_returns_dict(self):
+        """Should return a dict with hour counts."""
+        from homepage.web_app import get_hourly_detections
+        result = get_hourly_detections()
+        assert isinstance(result, dict)
+
+    def test_get_hourly_detections_keys_are_ints(self):
+        """Hour keys should be integers 0-23."""
+        from homepage.web_app import get_hourly_detections
+        result = get_hourly_detections()
+        for key in result.keys():
+            assert isinstance(key, int)
+            assert 0 <= key <= 23
+
+    @patch('homepage.web_app.sqlite3.connect')
+    def test_get_hourly_detections_returns_empty_on_error(self, mock_connect):
+        """Should return empty dict when database is unavailable."""
+        mock_connect.side_effect = sqlite3.Error("Database unavailable")
+        from homepage.web_app import get_hourly_detections
+        result = get_hourly_detections()
+        assert result == {}
+
+    def test_hourly_activity_section_returns_div(self):
+        """Should return a Div element."""
+        from homepage.web_app import _hourly_activity_section
+        content = _hourly_activity_section()
+        assert "Today's Activity" in str(content)
+
+
+class TestSystemHealth:
+    """Test system health metrics functionality."""
+
+    def test_get_system_health_returns_dict(self):
+        """Should return a dict with health metrics."""
+        from homepage.web_app import get_system_health
+        result = get_system_health()
+        assert isinstance(result, dict)
+
+    def test_get_system_health_has_required_keys(self):
+        """Should include disk, db, and recordings metrics."""
+        from homepage.web_app import get_system_health
+        result = get_system_health()
+        assert 'disk_used_gb' in result
+        assert 'disk_total_gb' in result
+        assert 'disk_percent' in result
+        assert 'db_size_mb' in result
+        assert 'recordings_gb' in result
+
+    def test_system_health_section_returns_div(self):
+        """Should return a Div element with health widgets."""
+        from homepage.web_app import _system_health_section
+        content = _system_health_section()
+        assert "System Health" in str(content)
+        assert "Disk Usage" in str(content)
+        assert "Database" in str(content)
+
+
+class TestStatsContentEnhanced:
+    """Test enhanced stats page with hourly and health sections."""
+
+    def test_stats_content_includes_hourly_activity(self):
+        """Stats should show hourly activity section."""
+        from homepage.web_app import _stats_content
+        content = str(_stats_content())
+        assert "Today's Activity" in content
+
+    def test_stats_content_includes_system_health(self):
+        """Stats should show system health section."""
+        from homepage.web_app import _stats_content
+        content = str(_stats_content())
+        assert "System Health" in content
+
+    def test_stats_content_uses_widget_classes(self):
+        """Stats should use proper widget styling."""
+        from homepage.web_app import _stats_content
+        content = str(_stats_content())
+        assert 'class="widget"' in content or "class='widget'" in content
