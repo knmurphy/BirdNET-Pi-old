@@ -195,6 +195,7 @@ def get_system_health() -> dict:
             "recordings_gb": 0.0,
         }
 
+
 # Design System - Dark Theme
 APP_CSS = """
 :root {
@@ -524,7 +525,11 @@ def _shell(content, current_path: str = "/app/dashboard"):
             Link(rel="preconnect", href="https://fonts.gstatic.com", crossorigin=""),
             Link(
                 rel="stylesheet",
-                href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:wght@400;700&family=Source+Serif+4:ital,wght@0,400;1,400&display=swap"
+                href=(
+                    "https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500"
+                    "&family=Fraunces:wght@400;700"
+                    "&family=Source+Serif+4:ital,wght@0,400;1,400&display=swap"
+                ),
             ),
             Title("Field Station"),
             Style(APP_CSS),
