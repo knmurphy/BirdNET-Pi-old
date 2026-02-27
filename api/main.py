@@ -55,9 +55,9 @@ app.include_router(spectrogram.router, prefix="/api", tags=["spectrogram"])
 # React PWA Serving Configuration
 # ============================================
 
-# Get the frontend dist directory
+# Get the frontend dist directory (use env var if set, else default)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-FRONTEND_DIST = os.path.join(BASE_DIR, "frontend", "dist")
+FRONTEND_DIST = os.environ.get("FRONTEND_DIST", os.path.join(BASE_DIR, "frontend", "dist"))
 
 
 def serve_react_app(request_path: str):
