@@ -59,6 +59,17 @@ export interface SpeciesTodayResponse {
   generated_at: string; // ISO datetime
 }
 
+export interface SpeciesDetectionCount {
+  date: string;
+  count: number;
+}
+
+export interface SpeciesDetectionHistory {
+  com_name: string;
+  days: number;
+  data: SpeciesDetectionCount[];
+}
+
 // =============================================================================
 // Summary Types
 // =============================================================================

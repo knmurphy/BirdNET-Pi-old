@@ -8,7 +8,13 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from api.services.database import get_connection, get_duckdb_connection
-from api.models.detection import Detection, TodaySummaryResponse, TopSpecies
+from api.models.detection import (
+    Detection,
+    TodaySummaryResponse,
+    TopSpecies,
+    SpeciesDetectionHistory,
+    SpeciesDetectionCount,
+)
 from api.services.eventbus import DetectionEvent, event_bus
 
 router = APIRouter()
@@ -26,10 +32,16 @@ class DetectionsResponse(BaseModel):
 
 @router.get("/detections", response_model=DetectionsResponse)
 async def get_detections(
-    date_param: Optional[str] = Query(None, description="Filter by date (YYYY-MM-DD or 'today')"),
+    date_param: Optional[str] = Query(
+        None, description="Filter by date (YYYY-MM-DD or 'today')"
+    ),
     classifier: Optional[str] = Query(None, description="Filter by classifier name"),
-    min_confidence: Optional[float] = Query(None, ge=0.0, le=1.0, description="Minimum confidence threshold"),
-    species: Optional[str] = Query(None, description="Filter by species name (common name)"),
+    min_confidence: Optional[float] = Query(
+        None, ge=0.0, le=1.0, description="Minimum confidence threshold"
+    ),
+    species: Optional[str] = Query(
+        None, description="Filter by species name (common name)"
+    ),
     page: int = Query(1, ge=1, description="Page number (1-indexed)"),
     limit: int = Query(50, ge=1, le=500, description="Results per page"),
 ):
@@ -37,7 +49,7 @@ async def get_detections(
 
     Query SQLite for detection records with support for filtering by date,
     classifier, minimum confidence, and species name.
-    
+
     Note: Currently uses SQLite until DuckDB migration is complete.
     Classifier filtering is not available in SQLite schema.
     """
@@ -45,11 +57,11 @@ async def get_detections(
     try:
         conn = get_connection()
         cursor = conn.cursor()
-        
+
         # Build query with filters using SQLite column names (Capital_Snake_Case)
         conditions = []
         params = []
-        
+
         if date_param:
             conditions.append("Date = ?")
             # Resolve "today" to current date
@@ -57,28 +69,28 @@ async def get_detections(
                 params.append(date.today().isoformat())
             else:
                 params.append(date_param)
-        
+
         # Note: classifier column doesn't exist in SQLite schema yet
         # This filter will be ignored for now until DuckDB migration
-        
+
         if min_confidence is not None:
             conditions.append("Confidence >= ?")
             params.append(min_confidence)
-        
+
         if species:
             conditions.append("Com_Name LIKE ?")
             params.append(f"%{species}%")
-        
+
         where_clause = " AND ".join(conditions) if conditions else "1=1"
-        
+
         # Get total count
         count_query = f"SELECT COUNT(*) FROM detections WHERE {where_clause}"
         cursor.execute(count_query, params)
         total = cursor.fetchone()[0]
-        
+
         # Calculate pagination
         offset = (page - 1) * limit
-        
+
         # Get paginated results using SQLite column names
         # SQLite schema: Date, Time, Sci_Name, Com_Name, Confidence, Lat, Lon, Cutoff, Week, Sens, Overlap, File_Name
         data_query = f"""
@@ -92,7 +104,7 @@ async def get_detections(
         params_with_pagination = params + [limit, offset]
         cursor.execute(data_query, params_with_pagination)
         rows = cursor.fetchall()
-        
+
         # Convert to Detection models
         detections = [
             Detection(
@@ -114,7 +126,7 @@ async def get_detections(
             )
             for row in rows
         ]
-        
+
         return DetectionsResponse(
             detections=detections,
             total=total,
@@ -122,7 +134,7 @@ async def get_detections(
             limit=limit,
             has_more=(offset + limit) < total,
         )
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
     finally:
@@ -144,9 +156,7 @@ async def get_today_summary():
         cursor = conn.cursor()
 
         # Total detections today
-        cursor.execute(
-            "SELECT COUNT(*) FROM detections WHERE Date = ?", [today]
-        )
+        cursor.execute("SELECT COUNT(*) FROM detections WHERE Date = ?", [today])
         total = cursor.fetchone()[0]
 
         # Species count today
@@ -156,29 +166,34 @@ async def get_today_summary():
         species_count = cursor.fetchone()[0]
 
         # Top 5 species
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT Com_Name, COUNT(*) as count
             FROM detections
             WHERE Date = ?
             GROUP BY Com_Name
             ORDER BY count DESC
             LIMIT 5
-        """, [today])
+        """,
+            [today],
+        )
         top_species_rows = cursor.fetchall()
 
         top_species = [
-            TopSpecies(com_name=row[0], count=row[1])
-            for row in top_species_rows
+            TopSpecies(com_name=row[0], count=row[1]) for row in top_species_rows
         ]
 
         # Hourly counts (24-element array)
         # SQLite uses substr() to extract characters
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT CAST(substr(Time, 1, 2) AS INTEGER) as hour, COUNT(*) as count
             FROM detections
             WHERE Date = ?
             GROUP BY hour
-        """, [today])
+        """,
+            [today],
+        )
         hourly_rows = cursor.fetchall()
 
         hourly_counts = [0] * 24
@@ -199,7 +214,6 @@ async def get_today_summary():
     finally:
         if conn:
             conn.close()
-
 
 
 class DetectionNotifyRequest(BaseModel):
@@ -237,3 +251,41 @@ async def notify_detection(req: DetectionNotifyRequest):
     )
     delivered = await event_bus.publish(event)
     return {"status": "published", "subscribers_notified": delivered}
+
+
+@router.get("/detections/species/history", response_model=SpeciesDetectionHistory)
+async def get_species_detection_history(
+    com_name: str = Query(..., description="Common name of species"),
+    days: int = Query(30, ge=1, le=1080, description="Number of days to look back"),
+):
+    """Get detection history for a species over a date range.
+
+    Returns daily detection counts for the specified species within the given
+    number of days, matching the legacy todays_detections.php endpoint.
+    """
+    conn = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+
+        query = """
+            SELECT Date, COUNT(*) AS count
+            FROM detections
+            WHERE Com_Name = ?
+            AND Date BETWEEN DATE('now', '-' || ? || ' days') AND DATE('now')
+            GROUP BY Date
+            ORDER BY Date
+        """
+
+        cursor.execute(query, [com_name, days])
+        rows = cursor.fetchall()
+
+        data = [SpeciesDetectionCount(date=row[0], count=row[1]) for row in rows]
+
+        return SpeciesDetectionHistory(com_name=com_name, days=days, data=data)
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+    finally:
+        if conn:
+            conn.close()

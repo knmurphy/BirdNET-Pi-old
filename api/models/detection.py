@@ -39,3 +39,18 @@ class TodaySummaryResponse(BaseModel):
     top_species: list[TopSpecies]
     hourly_counts: list[int]  # 24-element array
     generated_at: str
+
+
+class SpeciesDetectionCount(BaseModel):
+    """Detection count for a species on a specific date."""
+
+    date: str
+    count: int
+
+
+class SpeciesDetectionHistory(BaseModel):
+    """Detection history for a species over date range."""
+
+    com_name: str
+    days: int
+    data: list[SpeciesDetectionCount]

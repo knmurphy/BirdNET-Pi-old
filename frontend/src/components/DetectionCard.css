@@ -100,6 +100,13 @@
   margin-bottom: var(--space-1);
 }
 
+.detection-card__header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
 /* Common name - primary text, largest */
 .detection-card__common-name {
   font-family: var(--font-display);
@@ -214,6 +221,38 @@
   margin-left: auto;
   color: var(--accent);
   font-size: 10px;
+}
+
+.detection-card__chart-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text3);
+  cursor: pointer;
+  transition: color var(--transition-fast), background-color var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.detection-card__chart-btn:hover {
+  color: var(--text);
+  background-color: var(--bg3);
+}
+
+.detection-card__chart-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.detection-card__chart-btn svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 2;
 }
 
 /* =========================================
