@@ -99,6 +99,71 @@ For more details, see README.md and docs/QUICKSTART.md.
 
 <!-- END BEADS INTEGRATION -->
 
+## Development Commands
+
+### Python Backend
+```bash
+# Run tests
+pytest
+
+# Run single test
+pytest tests/test_analysis.py::TestRunAnalysis::test_run_analysis
+
+# Run tests in specific file
+pytest tests/test_web_app.py
+
+# Lint code
+flake8
+
+# Lint specific file
+flake8 scripts/analysis.py
+```
+
+### React Frontend (cd into frontend/)
+```bash
+# Development server
+npm run dev
+
+# Production build
+npm run build
+
+# Lint code
+npm run lint
+
+# Preview production build
+npm run preview
+```
+
+## Code Style Guidelines
+
+### Python
+- **Imports**: Stdlib → Third-party → Local (each group sorted alphabetically)
+- **Naming**: snake_case for functions/variables, PascalCase for classes
+- **Line length**: 160 chars (configured in .flake8)
+- **Complexity**: Max 15 (configured in .flake8)
+- **Docstrings**: Use """ format for modules, classes, functions
+- **Type hints**: Use Optional, List, Dict from typing module
+- **Testing**: Use unittest.TestCase; mock external dependencies with unittest.mock
+- **Error handling**: Try/except with specific exceptions; raise HTTPException in API routes
+
+### TypeScript/React
+- **Components**: PascalCase filenames (DetectionCard.tsx), export named functions
+- **Hooks**: camelCase filenames (useDetections.ts), prefix with "use"
+- **Types**: Centralized in src/types/index.ts; use interface for object shapes
+- **Imports**: Type imports first (`import type { X }`), then regular imports
+- **CSS**: Separate .css files with BEM naming (className="block__element--modifier")
+- **Comments**: JSDoc /** */ for functions and components
+- **Props**: Define interfaces above components with inline comments for props
+- **Functions**: Arrow functions for components; regular functions for utilities
+- **State**: React useState/useReducer for local, TanStack Query for server state
+
+### Backend API
+- **FastAPI routers**: One file per domain (detections.py, species.py, system.py)
+- **Pydantic models**: Separate models.py files for request/response schemas
+- **Database**: DuckDB (primary), SQLite (legacy); use context managers for connections
+- **Routes**: GET/POST/PUT/DELETE; async functions for I/O operations
+- **Error handling**: HTTPException with appropriate status codes (400, 404, 500)
+
 ## Landing the Plane (Session Completion)
 
 **When ending a work session**, you MUST complete ALL steps below. Work is NOT complete until `git push` succeeds.
