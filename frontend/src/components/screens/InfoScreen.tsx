@@ -41,7 +41,7 @@ function formatUptime(seconds: number): string {
 }
 
 function getMapImageUrl(lat: number, lon: number): string {
-  const zoom = 12;
+  const zoom = 11;
   const width = 400;
   const height = 200;
   // Yandex Static Maps API (free, no API key required)

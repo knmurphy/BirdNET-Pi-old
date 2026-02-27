@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     config_ini_path: Path = Path.home() / "BirdNET-Pi" / "birdnet.conf"
 
     # Audio settings
-    audio_base_path: Path = Path.home() / "BirdNET-Pi" / "Extracted" / "By_Date"
+    audio_base_path: Path = Path.home() / "BirdSongs" / "Extracted" / "By_Date"
 
     model_config = SettingsConfigDict(env_prefix="FIELD_STATION_")
 
