@@ -72,7 +72,7 @@ export function SpeciesRow({ species, isNew, onClick, chartData, onOpenChart, on
         <div className="species-row__info">
           <span className="species-row__common-name">
             {species.com_name}
-            {isNew && <span className="species-row__new-badge">NEW</span>}
+            {isNew && <span className="species-badge species-badge--new">New</span>}
           </span>
           <span className="species-row__scientific-name">{species.sci_name}</span>
         </div>

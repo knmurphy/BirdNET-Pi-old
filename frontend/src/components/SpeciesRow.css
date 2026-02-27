@@ -151,15 +151,16 @@
 }
 
 /* NEW badge for first detection of species today */
-.species-row__new-badge {
-  font-family: var(--font-mono);
-  font-size: 9px;
+.species-badge {
+  display: inline-block;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--bg);
-  background-color: var(--accent);
-  padding: 2px 6px;
-  border-radius: var(--radius-sm);
-  margin-left: var(--space-2);
+  border-radius: 4px;
+  margin-left: 0.5rem;
+}
+
+.species-badge--new {
+  background: var(--color-accent-primary);
+  color: white;
 }
