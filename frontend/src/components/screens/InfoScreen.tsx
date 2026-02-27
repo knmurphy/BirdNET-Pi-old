@@ -2,6 +2,15 @@ import { useQuery } from '@tanstack/react-query';
 import type { SystemResponse, SettingsResponse } from '../../types';
 import './Screens.css';
 
+/**
+ * Info Screen
+ *
+ * Displays system health information and station settings.
+ * Combines the functionality of the old System and Settings screens.
+ * System health includes: CPU, temperature (C+F), memory, disk, uptime, classifiers, SSE
+ * Settings include: location map, coordinates, classifier config, storage path
+ */
+
 async function fetchSystem(): Promise<SystemResponse> {
   const response = await fetch('/api/system');
   if (!response.ok) throw new Error('Failed to fetch system info');
@@ -38,25 +47,78 @@ function getMapImageUrl(lat: number, lon: number): string {
 }
 
 export function InfoScreen() {
-  const { data: system, isLoading: loadingSystem } = useQuery({
+  const { data: system, isLoading: loadingSystem, isError: isSystemError, error: systemError, refetch: refetchSystem } = useQuery({
     queryKey: ['system'],
     queryFn: fetchSystem,
     refetchInterval: 30000, // Refresh every 30 seconds
   });
 
-  const { data: settings, isLoading: loadingSettings } = useQuery({
+  const { data: settings, isLoading: loadingSettings, isError: isSettingsError, error: settingsError, refetch: refetchSettings } = useQuery({
     queryKey: ['settings'],
     queryFn: fetchSettings,
     staleTime: 60_000,
   });
 
   const isLoading = loadingSystem || loadingSettings;
+  const isError = isSystemError || isSettingsError;
 
   return (
     <div className="screen screen--info">
-      {isLoading && <p className="screen__hint">Loading system info...</p>}
+      {isError && (
+        <div className="screen__error">
+          <p className="screen__error-message">
+            {isSystemError ? `Error loading system info: ${systemError?.message || 'Unknown error'}` : null}
+            {isSettingsError ? `Error loading settings: ${settingsError?.message || 'Unknown error'}` : null}
+          </p>
+          <div className="screen__error-actions">
+            {isSystemError && (
+              <button onClick={() => refetchSystem()} className="button button--primary">
+                Retry System
+              </button>
+            )}
+            {isSettingsError && (
+              <button onClick={() => refetchSettings()} className="button button--primary">
+                Retry Settings
+              </button>
+            )}
+          </div>
+        </div>
+      )}
       
-      {!isLoading && system && settings && (
+      {isLoading && !isError && (
+        <div className="info-grid">
+          <div className="info-item info-item--skeleton">
+            <span className="info-item__label"></span>
+            <span className="info-item__value"></span>
+          </div>
+          <div className="info-item info-item--skeleton">
+            <span className="info-item__label"></span>
+            <span className="info-item__value"></span>
+          </div>
+          <div className="info-item info-item--skeleton">
+            <span className="info-item__label"></span>
+            <span className="info-item__value"></span>
+          </div>
+          <div className="info-item info-item--skeleton">
+            <span className="info-item__label"></span>
+            <span className="info-item__value"></span>
+          </div>
+          <div className="info-item info-item--skeleton">
+            <span className="info-item__label"></span>
+            <span className="info-item__value"></span>
+          </div>
+          <div className="info-item info-item--skeleton">
+            <span className="info-item__label"></span>
+            <span className="info-item__value"></span>
+          </div>
+          <div className="info-item info-item--skeleton">
+            <span className="info-item__label"></span>
+            <span className="info-item__value"></span>
+          </div>
+        </div>
+      )}
+      
+      {!isLoading && !isError && system && settings && (
         <>
           {/* System Health Section */}
           <section className="info-section">

@@ -525,3 +525,48 @@
   font-weight: 600;
   color: var(--color-text-primary);
 }
+
+/* Skeleton loader for info items */
+.info-item--skeleton {
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+.info-item--skeleton .info-item__label {
+  height: 14px;
+  width: 70%;
+  background-color: var(--bg3);
+  border-radius: var(--radius-sm);
+  margin-bottom: 0.5rem;
+}
+
+.info-item--skeleton .info-item__value {
+  height: 24px;
+  width: 50%;
+  background-color: var(--bg3);
+  border-radius: var(--radius-sm);
+}
+
+/* Error state styles */
+.screen__error {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-8) var(--space-6);
+  text-align: center;
+  gap: var(--space-4);
+}
+
+.screen__error-message {
+  font-size: var(--text-base);
+  color: var(--text2);
+  margin: 0;
+}
+
+.screen__error-actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  justify-content: center;
+}
