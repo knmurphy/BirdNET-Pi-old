@@ -1,5 +1,7 @@
 # Field Station UI
 
+> **For AI Agents**: See [ARCHITECTURE.md](./ARCHITECTURE.md) for detailed architecture context.
+
 React frontend for BirdNET-Pi Field Station OS. Mobile-first PWA with real-time detection feed.
 
 ## Tech Stack
