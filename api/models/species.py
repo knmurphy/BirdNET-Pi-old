@@ -12,6 +12,7 @@ class SpeciesSummary(BaseModel):
     max_confidence: float
     last_seen: str  # "HH:MM:SS"
     hourly_counts: list[int]  # 24-element array
+    is_new: bool  # First detection was within last 2 hours
 
 
 class SpeciesTodayResponse(BaseModel):

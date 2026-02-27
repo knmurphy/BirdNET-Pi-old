@@ -1,73 +1,118 @@
-# React + TypeScript + Vite
+# Field Station UI
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React frontend for BirdNET-Pi Field Station OS. Mobile-first PWA with real-time detection feed.
 
-Currently, two official plugins are available:
+## Tech Stack
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **Vite** - Build tool
+- **React 18** - UI framework
+- **TypeScript** - Type safety
+- **React Router** - Client-side routing
+- **TanStack Query** - Server state management
+- **SSE (Server-Sent Events)** - Real-time detection feed
+- **vite-plugin-pwa** - PWA support
 
-## React Compiler
+## Development
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+```bash
+# Install dependencies
+npm install
 
-## Expanding the ESLint configuration
+# Start dev server
+npm run dev
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+# Build for production
+npm run build
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+# Preview production build
+npm run preview
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Deployment
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+The frontend is deployed to the Raspberry Pi at `10.0.0.177`.
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+# Build and deploy
+npm run build
+rsync -avz --delete dist/ knmurphy@10.0.0.177:/home/knmurphy/BirdNET-Pi/frontend/dist/
 ```
+
+The backend serves the frontend from `/home/knmurphy/BirdNET-Pi/frontend/dist/` at port 8003.
+
+## Project Structure
+
+```
+src/
+├── components/
+│   ├── DetectionCard.tsx    # Single detection display with audio playback
+│   ├── SpeciesRow.tsx       # Species list row with NEW badge
+│   ├── layout/
+│   │   ├── Header.tsx       # App header with connection status
+│   │   └── TabBar.tsx       # Bottom navigation tabs
+│   └── screens/
+│       ├── LiveScreen.tsx   # Real-time detection feed (SSE)
+│       ├── SpeciesScreen.tsx # Today's species list with sorting
+│       ├── HistoryScreen.tsx # Paginated detection history
+│       ├── StatsScreen.tsx  # System health display
+│       └── SettingsScreen.tsx # Station config with location map
+├── contexts/
+│   ├── SSEContext.ts        # SSE connection context
+│   └── SSEProvider.tsx      # SSE provider with React Query integration
+├── hooks/
+│   ├── useSSE.ts            # SSE connection hook
+│   ├── useDetections.ts     # Detection data from SSE
+│   ├── useSpeciesToday.ts   # Today's species data
+│   ├── useTodaySummary.ts   # Detection totals
+│   ├── useSystemHealth.ts   # CPU, temp, disk, uptime
+│   └── useAudio.ts          # Audio playback hook
+├── types/
+│   └── index.ts             # TypeScript interfaces for API
+└── App.tsx                  # Main app with routing
+```
+
+## API Endpoints
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/detections` | Paginated detection list |
+| `GET /api/detections/today/summary` | Today's detection totals |
+| `GET /api/species/today` | Today's species with hourly counts |
+| `GET /api/system` | System health (CPU, temp, disk, uptime) |
+| `GET /api/settings` | Station configuration |
+| `GET /api/classifiers` | Classifier configs |
+| `GET /api/audio/{path}` | Serve audio files |
+| `GET /api/events` | SSE stream for real-time detections |
+
+## Features
+
+### Live Screen
+- Real-time detection feed via SSE
+- Time-based fading (older detections are dimmed)
+- Audio playback on tap
+- Connection status indicator
+
+### Species Screen
+- Sorted species list (by count, recent, confidence, A-Z)
+- "NEW" badge for species first seen in last 2 hours
+- Detection counts and peak confidence
+
+### History Screen
+- Paginated detection history
+- Audio playback for each detection
+
+### Stats Screen
+- CPU usage, temperature, disk usage
+- Formatted uptime display
+
+### Settings Screen
+- Location map (OpenStreetMap static image, no API key)
+- Classifier settings display
+- Audio storage path
+
+## Design System
+
+- **Dark theme** with CSS custom properties
+- **Fonts**: DM Mono, Fraunces, Source Serif 4
+- **Mobile-first** responsive design
+- **PWA** installable on mobile devices

@@ -4,8 +4,8 @@
  */
 
 import type { Detection } from '../types';
-import { useAudio } from '../../src/hooks/useAudio';
-import { getConfidenceColor, formatConfidence } from '../../src/hooks/useDetections';
+import { useAudio } from '../hooks/useAudio';
+import { formatConfidence } from '../hooks/useDetections';
 import './DetectionCard.css';
 
 export interface DetectionCardProps {
@@ -18,6 +18,8 @@ export interface DetectionCardProps {
 	onClick?: () => void;
 	/** Whether this is a newly arrived detection (triggers animation) */
 	isNew?: boolean;
+	/** Age category for time-based fading */
+	ageCategory?: 'recent' | 'medium' | 'old';
 }
 
 /**
@@ -55,19 +57,27 @@ function getClassifierDisplayName(classifier: string): string {
 export function DetectionCard({
 	detection,
 	classifierColor,
-	thresholds,
+	// thresholds, // Unused parameter - remove to fix TS6133 error
 	onClick,
 	isNew = false,
+	ageCategory = 'recent',
 }: DetectionCardProps) {
-	const { audioUrl } = useAudio(detection.id, detection.file_name);
+	const { playing, toggle } = useAudio(detection.id, detection.file_name);
+
+	const ageClassName = ageCategory === 'recent' ? '' : `detection-card--age-${ageCategory}`;
+
+	const handleClick = () => {
+		toggle();
+		onClick?.();
+	};
 
 	return (
 		<article
-			className={`detection-card ${isNew ? 'detection-card--new' : ''}`}
-			onClick={onClick}
+			className={`detection-card ${isNew ? 'detection-card--new' : ''} ${ageClassName}`.trim()}
+			onClick={handleClick}
 			role="button"
 			tabIndex={0}
-			aria-label={`${detection.com_name}, confidence ${formatConfidence(detection.confidence)}, play audio`}
+			aria-label={`${detection.com_name}, confidence ${formatConfidence(detection.confidence)}, ${playing ? 'stop audio' : 'play audio'}`}
 		>
 			<div className="detection-card__header">
 				<h3 className="detection-card__common-name">{detection.com_name}</h3>
@@ -94,7 +104,6 @@ export function DetectionCard({
 			</div>
 
 			<div className="detection-card__footer">
-				<audio src={audioUrl} preload="none" style={{ display: 'none' }} />
 				<span className="detection-card__classifier">
 					<span
 						className="detection-card__classifier-dot"
@@ -103,6 +112,7 @@ export function DetectionCard({
 					/>
 					<span className="detection-card__classifier-name">{getClassifierDisplayName(detection.classifier)}</span>
 				</span>
+				{playing && <span className="detection-card__playing-indicator">▶</span>}
 			</div>
 		</article>
 	);

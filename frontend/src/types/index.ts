@@ -51,6 +51,7 @@ export interface SpeciesSummary {
   max_confidence: number;
   last_seen: string; // "HH:MM:SS"
   hourly_counts: number[]; // 24-element array, counts per hour
+  is_new: boolean; // First detection was within last 2 hours
 }
 
 export interface SpeciesTodayResponse {
@@ -83,6 +84,35 @@ export interface SystemResponse {
   active_classifiers: string[]; // Classifier IDs
   sse_subscribers: number;
   generated_at: string;
+}
+
+// =============================================================================
+// Settings Types
+// =============================================================================
+
+export interface SettingsResponse {
+  audio_path: string;
+  latitude: number;
+  longitude: number;
+  confidence_threshold: number;
+  overlap: number;
+  sensitivity: number;
+  week: number;  // -1 for auto
+  generated_at: string;
+}
+
+// =============================================================================
+// Flickr Image Types
+// =============================================================================
+
+export interface FlickrImageResponse {
+  sci_name: string;
+  com_name: string;
+  image_url: string;
+  title: string | null;
+  author_url: string | null;
+  license_url: string | null;
+  source: string;
 }
 
 // =============================================================================

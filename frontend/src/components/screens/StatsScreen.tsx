@@ -6,6 +6,26 @@
 import { useSystemHealth } from '../../hooks/useSystemHealth';
 import './Screens.css';
 
+/**
+ * Format uptime seconds into human-readable string
+ */
+function formatUptime(seconds: number): string {
+	const hours = Math.floor(seconds / 3600);
+	const minutes = Math.floor((seconds % 3600) / 60);
+	
+	if (hours >= 24) {
+		const days = Math.floor(hours / 24);
+		const remainingHours = hours % 24;
+		return `${days}d ${remainingHours}h`;
+	}
+	
+	if (hours > 0) {
+		return `${hours}h ${minutes}m`;
+	}
+	
+	return `${minutes}m`;
+}
+
 export function StatsScreen() {
 	const { data: systemHealth } = useSystemHealth();
 
@@ -28,7 +48,7 @@ export function StatsScreen() {
 				</div>
 				<div className="screen__stats-item">
 					<div className="screen__stats-label">Uptime</div>
-					<div className="screen__stats-value">{Math.floor(systemHealth?.uptime_seconds ?? 0 / 3600)}h</div>
+					<div className="screen__stats-value">{formatUptime(systemHealth?.uptime_seconds ?? 0)}</div>
 				</div>
 			</div>
 		</div>

@@ -117,6 +117,7 @@ export function SpeciesScreen() {
               <SpeciesRow
                 key={species.sci_name}
                 species={species}
+                isNew={species.is_new}
               />
             ))}
           </div>

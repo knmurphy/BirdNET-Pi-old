@@ -15,6 +15,27 @@ const MAX_VISIBLE_DETECTIONS = 100;
 /** Animation duration for new detection highlight (ms) */
 const NEW_DETECTION_DURATION = 500;
 
+/** Age thresholds for fading (in seconds) */
+const AGE_THRESHOLD_MEDIUM = 60; // 1 minute
+const AGE_THRESHOLD_OLD = 300; // 5 minutes
+
+/**
+ * Calculate age category for a detection based on its time
+ */
+function getAgeCategory(detectionTime: string): 'recent' | 'medium' | 'old' {
+	try {
+		const detectionDate = new Date(detectionTime);
+		const now = new Date();
+		const ageSeconds = (now.getTime() - detectionDate.getTime()) / 1000;
+		
+		if (ageSeconds >= AGE_THRESHOLD_OLD) return 'old';
+		if (ageSeconds >= AGE_THRESHOLD_MEDIUM) return 'medium';
+		return 'recent';
+	} catch {
+		return 'recent';
+	}
+}
+
 /**
  * Loading skeleton cards
  */
@@ -163,10 +184,7 @@ export function LiveScreen() {
 						key={detection.id}
 						detection={detection}
 						isNew={newDetectionIds.has(detection.id)}
-						onClick={() => {
-							// TODO: Audio playback (Phase 2)
-							console.log('Audio playback not yet implemented:', detection.file_name);
-						}}
+						ageCategory={getAgeCategory(detection.iso8601)}
 					/>
 				))}
 			</div>

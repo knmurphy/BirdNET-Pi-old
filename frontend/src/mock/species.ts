@@ -8,6 +8,7 @@ export const mockSpecies: SpeciesSummary[] = [
     max_confidence: 0.97,
     last_seen: '07:42:11',
     hourly_counts: [0, 0, 0, 0, 0, 0, 2, 3, 4, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    is_new: false,
   },
   {
     com_name: 'Northern Cardinal',
@@ -16,6 +17,7 @@ export const mockSpecies: SpeciesSummary[] = [
     max_confidence: 0.92,
     last_seen: '08:15:33',
     hourly_counts: [0, 0, 0, 0, 0, 0, 0, 2, 3, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    is_new: false,
   },
   {
     com_name: 'American Robin',
@@ -24,6 +26,7 @@ export const mockSpecies: SpeciesSummary[] = [
     max_confidence: 0.89,
     last_seen: '06:58:02',
     hourly_counts: [0, 0, 0, 0, 0, 0, 1, 2, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    is_new: false,
   },
   {
     com_name: 'Blue Jay',
@@ -32,6 +35,7 @@ export const mockSpecies: SpeciesSummary[] = [
     max_confidence: 0.95,
     last_seen: '09:22:47',
     hourly_counts: [0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    is_new: false,
   },
   {
     com_name: 'House Finch',
@@ -40,6 +44,7 @@ export const mockSpecies: SpeciesSummary[] = [
     max_confidence: 0.78,
     last_seen: '07:33:19',
     hourly_counts: [0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    is_new: false,
   },
   {
     com_name: 'Song Sparrow',
@@ -48,6 +53,7 @@ export const mockSpecies: SpeciesSummary[] = [
     max_confidence: 0.84,
     last_seen: '06:12:45',
     hourly_counts: [0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    is_new: false,
   },
   {
     com_name: 'Tufted Titmouse',
@@ -56,6 +62,7 @@ export const mockSpecies: SpeciesSummary[] = [
     max_confidence: 0.91,
     last_seen: '08:45:03',
     hourly_counts: [0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    is_new: false,
   },
   {
     com_name: 'White-breasted Nuthatch',
@@ -64,6 +71,7 @@ export const mockSpecies: SpeciesSummary[] = [
     max_confidence: 0.88,
     last_seen: '07:08:56',
     hourly_counts: [0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    is_new: false,
   },
 ];
 

@@ -44,6 +44,19 @@
   animation: slideDown 200ms ease-out;
 }
 
+/* Time-based fading for older detections */
+.detection-card--age-recent {
+  opacity: 1;
+}
+
+.detection-card--age-medium {
+  opacity: 0.75;
+}
+
+.detection-card--age-old {
+  opacity: 0.5;
+}
+
 @keyframes slideDown {
   from {
     opacity: 0;
@@ -171,6 +184,13 @@
   color: var(--text3);
   text-transform: uppercase;
   letter-spacing: 0.03em;
+}
+
+/* Playing indicator */
+.detection-card__playing-indicator {
+  margin-left: auto;
+  color: var(--accent);
+  font-size: 10px;
 }
 
 /* =========================================
