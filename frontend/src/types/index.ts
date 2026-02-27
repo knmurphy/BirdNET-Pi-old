@@ -138,9 +138,9 @@ export interface TodaySummaryResponse {
 
 export interface SystemResponse {
   cpu_percent: number;
-  memory_percent: number;
   temperature_celsius: number;
   temperature_fahrenheit: number;
+  memory_percent: number;
   disk_used_gb: number;
   disk_total_gb: number;
   uptime_seconds: number;
