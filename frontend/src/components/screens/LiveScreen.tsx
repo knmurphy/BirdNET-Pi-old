@@ -3,7 +3,7 @@
  * Real-time detection feed powered by SSE
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useLiveDetections } from '../../hooks/useDetections';
 import { DetectionCard } from '../DetectionCard';
 import './Screens.css';
@@ -95,29 +95,23 @@ function ErrorState({ message }: { message: string }) {
 export function LiveScreen() {
 	const { detections, isLoading, isError, error } = useLiveDetections();
 	const [newDetectionIds, setNewDetectionIds] = useState<Set<number>>(new Set());
-	const [mostRecentDetections, setMostRecentDetections] = useState<Detection[]>([]);
+	const seenIdsRef = useRef<Set<number>>(new Set());
 
-	useEffect(() => {
-		if (detections && detections.length > 0) {
-			const recent = detections.slice(0, 4);
-			setMostRecentDetections(recent);
-		}
-	}, [detections]);
+	const mostRecentDetections = detections.slice(0, 4);
 
 	// Track new detections for animation
-	// When a detection arrives, mark it as "new" for a short period
 	useEffect(() => {
 		if (detections.length === 0) return;
 
-		// Clear any existing timeouts
 		const timeouts: ReturnType<typeof setTimeout>[] = [];
-
-		// Mark the first detection as new (it's the most recent)
 		const latestId = detections[0]?.id;
-		if (latestId !== undefined && !newDetectionIds.has(latestId)) {
-			setNewDetectionIds((prev) => new Set([...prev, latestId]));
 
-			// Clear after animation duration
+		if (latestId !== undefined && !seenIdsRef.current.has(latestId)) {
+			seenIdsRef.current.add(latestId);
+			setTimeout(() => {
+				setNewDetectionIds((prev) => new Set([...prev, latestId]));
+			}, 0);
+
 			const timeout = setTimeout(() => {
 				setNewDetectionIds((prev) => {
 					const next = new Set(prev);

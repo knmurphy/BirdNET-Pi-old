@@ -57,7 +57,7 @@ export function SpeciesScreen() {
   const sortedSpecies = useMemo(() => {
     if (!data?.species) return [];
     return sortSpecies(data.species, sortBy);
-  }, [data?.species, sortBy]);
+  }, [data, sortBy]);
 
   const handleSortChange = (newSort: SortOption) => {
     setSortBy(newSort);
