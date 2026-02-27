@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C /Users/knmurphy/Documents/PROJECTS/BirdNET-Pi-old status)",
+      "WebFetch(domain:support.ebird.org)",
+      "WebFetch(domain:ebird.org)",
+      "WebFetch(domain:science.ebird.org)"
+    ]
+  }
+}
