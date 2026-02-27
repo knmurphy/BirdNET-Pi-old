@@ -141,6 +141,29 @@
   margin-top: 2px;
 }
 
+.species-card__ref-links {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.species-card__ref-link {
+  display: inline-flex;
+  align-items: center;
+  color: var(--text3);
+  transition: color var(--transition-fast);
+  padding: 4px;
+}
+
+.species-card__ref-link:hover {
+  color: var(--text);
+}
+
+.species-card__ref-link svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 2;
+}
+
 .species-card__video-wrapper {
   position: relative;
   border-radius: var(--radius-sm);

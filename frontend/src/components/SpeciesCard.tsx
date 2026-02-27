@@ -112,6 +112,35 @@ export function SpeciesCard({
               <span className="species-card__stat-time">{species.best_time}</span>
             </div>
           </div>
+          <div className="species-card__ref-links">
+            <a
+              href={`https://allaboutbirds.org/guide/${species.com_name.replace(/ /g, '_')}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="species-card__ref-link"
+              aria-label={`All About Birds page for ${species.com_name}`}
+              title="All About Birds"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <path d="M12 6v6M12 18v6M6 12h12" />
+              </svg>
+            </a>
+            <a
+              href={`https://en.wikipedia.org/wiki/${species.sci_name.replace(/ /g, '_')}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="species-card__ref-link"
+              aria-label={`Wikipedia page for ${species.sci_name}`}
+              title="Wikipedia"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="16" x2="12" y2="21" />
+                <path d="M14.5 17.5L12 20.5L9.5 17.5L7.5 12M9 11l3-3" />
+              </svg>
+            </a>
+          </div>
         </div>
 
         <div className="species-card__video-wrapper">

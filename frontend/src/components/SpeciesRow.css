@@ -123,6 +123,24 @@
   stroke-width: 2;
 }
 
+.species-row__ref-link {
+  display: inline-flex;
+  align-items: center;
+  color: var(--text3);
+  transition: color var(--transition-fast);
+  padding: 4px;
+}
+
+.species-row__ref-link:hover {
+  color: var(--text);
+}
+
+.species-row__ref-link svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 2;
+}
+
 .species-row__meta {
   display: flex;
   gap: var(--space-4);
