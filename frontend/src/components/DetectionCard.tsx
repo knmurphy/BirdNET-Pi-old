@@ -5,6 +5,7 @@
 
 import type { Detection } from '../types';
 import { useAudio } from '../hooks/useAudio';
+import { useSpeciesImage } from '../hooks/useSpeciesImage';
 import { formatConfidence } from '../hooks/useDetections';
 import './DetectionCard.css';
 
@@ -63,6 +64,7 @@ export function DetectionCard({
 	ageCategory = 'recent',
 }: DetectionCardProps) {
 	const { playing, toggle } = useAudio(detection.id, detection.file_name);
+	const { data: image } = useSpeciesImage(detection.com_name);
 
 	const ageClassName = ageCategory === 'recent' ? '' : `detection-card--age-${ageCategory}`;
 
@@ -79,40 +81,52 @@ export function DetectionCard({
 			tabIndex={0}
 			aria-label={`${detection.com_name}, confidence ${formatConfidence(detection.confidence)}, ${playing ? 'stop audio' : 'play audio'}`}
 		>
-			<div className="detection-card__header">
-				<h3 className="detection-card__common-name">{detection.com_name}</h3>
-				<time className="detection-card__time" dateTime={detection.iso8601}>
-					{detection.time}
-				</time>
-			</div>
-
-			<p className="detection-card__scientific-name">{detection.sci_name}</p>
-
-			<div className="detection-card__confidence">
-				<div className="detection-card__confidence-bar">
-					<div
-						className="detection-card__confidence-fill"
-						style={{
-							width: `${detection.confidence * 100}%`,
-							backgroundColor: classifierColor ?? getDefaultClassifierColor(detection.classifier),
-						}}
+			<div className="detection-card__content">
+				{image && (
+					<img
+						src={image.image_url}
+						alt={detection.com_name}
+						className="detection-card__image"
+						loading="lazy"
 					/>
+				)}
+				<div className="detection-card__info">
+					<div className="detection-card__header">
+						<h3 className="detection-card__common-name">{detection.com_name}</h3>
+						<time className="detection-card__time" dateTime={detection.iso8601}>
+							{detection.time}
+						</time>
+					</div>
+
+					<p className="detection-card__scientific-name">{detection.sci_name}</p>
+
+					<div className="detection-card__confidence">
+						<div className="detection-card__confidence-bar">
+							<div
+								className="detection-card__confidence-fill"
+								style={{
+									width: `${detection.confidence * 100}%`,
+									backgroundColor: classifierColor ?? getDefaultClassifierColor(detection.classifier),
+								}}
+							/>
+						</div>
+						<span className="detection-card__confidence-value">
+							{formatConfidence(detection.confidence)}
+						</span>
+					</div>
+
+					<div className="detection-card__footer">
+						<span className="detection-card__classifier">
+							<span
+								className="detection-card__classifier-dot"
+								style={{ backgroundColor: classifierColor ?? getDefaultClassifierColor(detection.classifier) }}
+								aria-hidden="true"
+							/>
+							<span className="detection-card__classifier-name">{getClassifierDisplayName(detection.classifier)}</span>
+						</span>
+						{playing && <span className="detection-card__playing-indicator">▶</span>}
+					</div>
 				</div>
-				<span className="detection-card__confidence-value">
-					{formatConfidence(detection.confidence)}
-				</span>
-			</div>
-
-			<div className="detection-card__footer">
-				<span className="detection-card__classifier">
-					<span
-						className="detection-card__classifier-dot"
-						style={{ backgroundColor: classifierColor ?? getDefaultClassifierColor(detection.classifier) }}
-						aria-hidden="true"
-					/>
-					<span className="detection-card__classifier-name">{getClassifierDisplayName(detection.classifier)}</span>
-				</span>
-				{playing && <span className="detection-card__playing-indicator">▶</span>}
 			</div>
 		</article>
 	);

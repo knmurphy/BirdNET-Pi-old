@@ -68,6 +68,29 @@
   }
 }
 
+/* Content wrapper: image + info side by side */
+.detection-card__content {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+}
+
+/* Species image thumbnail */
+.detection-card__image {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+  flex-shrink: 0;
+  background-color: var(--bg3);
+}
+
+/* Info section (right of image) */
+.detection-card__info {
+  flex: 1;
+  min-width: 0;
+}
+
 /* Header row: common name + time */
 .detection-card__header {
   display: flex;
@@ -239,7 +262,8 @@
 .detection-card--skeleton .detection-card__time,
 .detection-card--skeleton .detection-card__confidence-value,
 .detection-card--skeleton .detection-card__confidence-fill,
-.detection-card--skeleton .detection-card__classifier-dot {
+.detection-card--skeleton .detection-card__classifier-dot,
+.detection-card--skeleton .detection-card__image {
   visibility: hidden;
 }
 
@@ -268,6 +292,11 @@
   
   .detection-card__scientific-name {
     font-size: 15px;
+  }
+
+  .detection-card__image {
+    width: 64px;
+    height: 64px;
   }
 }
 

@@ -1,6 +1,6 @@
 """Detection-related API endpoints."""
 
-from datetime import datetime as date_type
+from datetime import date, datetime
 from typing import Optional
 import itertools
 
@@ -54,7 +54,7 @@ async def get_detections(
             conditions.append("Date = ?")
             # Resolve "today" to current date
             if date_param.lower() == "today":
-                params.append(date_type.today().isoformat())
+                params.append(date.today().isoformat())
             else:
                 params.append(date_param)
         
