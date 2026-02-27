@@ -103,6 +103,11 @@ export function DetectionCard({
 		}
 	};
 
+	const handleOpenInNewTab = () => {
+		const url = `/index.php?filename=${encodeURIComponent(detection.file_name)}`;
+		window.open(url, '_blank');
+	};
+
 	const handleCloseChart = () => {
 		if (onCloseChart) {
 			onCloseChart();
@@ -139,17 +144,31 @@ export function DetectionCard({
 								<time className="detection-card__time" dateTime={detection.iso8601}>
 									{detection.time}
 								</time>
-								<button
-									className="detection-card__chart-btn"
-									onClick={handleChartClick}
-									aria-label="View species stats"
-									title="View species stats"
-								>
-									<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-										<rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-										<path d="M3 18 L9 12 L15 14 L21 6" />
-									</svg>
-								</button>
+								<div className="detection-card__actions">
+									<button
+										className="detection-card__action-btn"
+										onClick={handleOpenInNewTab}
+										aria-label="Open detection in new tab"
+										title="Open in new tab"
+									>
+										<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+											<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2 2v8a2 2 0 0 1 2 2h6" />
+											<polyline points="15 3 21 3 9" />
+											<line x1="10" y1="14" x2="21" y2="3" />
+										</svg>
+									</button>
+									<button
+										className="detection-card__action-btn"
+										onClick={handleChartClick}
+										aria-label="View species stats"
+										title="View species stats"
+									>
+										<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+											<rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+											<path d="M3 18 L9 12 L15 14 L21 6" />
+										</svg>
+									</button>
+								</div>
 							</div>
 						</div>
 
@@ -170,44 +189,44 @@ export function DetectionCard({
 							</span>
 						</div>
 
-                    <div className="detection-card__footer">
-                        <span className="detection-card__classifier">
-                          <span
-                            className="detection-card__classifier-dot"
-                            style={{ backgroundColor: classifierColor ?? getDefaultClassifierColor(detection.classifier) }}
-                            aria-hidden="true"
-                          />
-                          <span className="detection-card__classifier-name">{getClassifierDisplayName(detection.classifier)}</span>
-                        </span>
-                        {playing && <span className="detection-card__playing-indicator">▶</span>}
-                        <a
-                          href={`https://allaboutbirds.org/guide/${detection.com_name.replace(/ /g, '_')}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="detection-card__ref-link"
-                          aria-label={`All About Birds page for ${detection.com_name}`}
-                          title="All About Birds"
-                        >
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <circle cx="12" cy="12" r="10" />
-                            <path d="M12 6v6M12 18v6M6 12h12" />
-                          </svg>
-                        </a>
-                        <a
-                          href={`https://en.wikipedia.org/wiki/${detection.sci_name.replace(/ /g, '_')}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="detection-card__ref-link"
-                          aria-label={`Wikipedia page for ${detection.sci_name}`}
-                          title="Wikipedia"
-                        >
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <circle cx="12" cy="12" r="10" />
-                            <line x1="12" y1="16" x2="12" y2="21" />
-                            <path d="M14.5 17.5L12 20.5L9.5 17.5L7.5 12M9 11l3-3" />
-                          </svg>
-                        </a>
-                      </div>
+						<div className="detection-card__footer">
+							<span className="detection-card__classifier">
+								<span
+									className="detection-card__classifier-dot"
+									style={{ backgroundColor: classifierColor ?? getDefaultClassifierColor(detection.classifier) }}
+									aria-hidden="true"
+								/>
+								<span className="detection-card__classifier-name">{getClassifierDisplayName(detection.classifier)}</span>
+							</span>
+							{playing && <span className="detection-card__playing-indicator">▶</span>}
+							<a
+								href={`https://allaboutbirds.org/guide/${detection.com_name.replace(/ /g, '_')}`}
+								target="_blank"
+								rel="noopener noreferrer"
+								className="detection-card__ref-link"
+								aria-label={`All About Birds page for ${detection.com_name}`}
+								title="All About Birds"
+							>
+								<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+									<circle cx="12" cy="12" r="10" />
+									<path d="M12 6v6M12 18v6M6 12h12" />
+								</svg>
+							</a>
+							<a
+								href={`https://en.wikipedia.org/wiki/${detection.sci_name.replace(/ /g, '_')}`}
+								target="_blank"
+								rel="noopener noreferrer"
+								className="detection-card__ref-link"
+								aria-label={`Wikipedia page for ${detection.sci_name}`}
+								title="Wikipedia"
+							>
+								<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+									<circle cx="12" cy="12" r="10" />
+									<line x1="12" y1="16" x2="12" y2="21" />
+									<path d="M14.5 17.5L12 20.5L9.5 17.5L7.5 12M9 11l3-3" />
+								</svg>
+							</a>
+						</div>
 					</div>
 				</div>
 			</article>
