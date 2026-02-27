@@ -12,8 +12,10 @@ from api.services.eventbus import event_bus
 from api.services.system_info import (
     get_cpu_percent,
     get_temperature,
+    celsius_to_fahrenheit,
     get_disk_usage,
     get_uptime,
+    get_memory_percent,
 )
 
 router = APIRouter()
@@ -40,6 +42,8 @@ async def get_system():
     return SystemResponse(
         cpu_percent=cpu,
         temperature_celsius=temp,
+        temperature_fahrenheit=celsius_to_fahrenheit(temp),
+        memory_percent=get_memory_percent(),
         disk_used_gb=disk.used_gb,
         disk_total_gb=disk.total_gb,
         uptime_seconds=uptime,
@@ -47,7 +51,6 @@ async def get_system():
         sse_subscribers=event_bus.subscriber_count,
         generated_at=datetime.now().isoformat(),
     )
-
 
 
 class RestartRequest(BaseModel):
@@ -95,7 +98,11 @@ async def restart_service(req: RestartRequest):
             check=True,
         )
         message = "Service restart initiated"
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError):
+    except (
+        subprocess.CalledProcessError,
+        subprocess.TimeoutExpired,
+        FileNotFoundError,
+    ):
         message = "Restart command issued (may require elevated privileges)"
 
     return RestartResponse(

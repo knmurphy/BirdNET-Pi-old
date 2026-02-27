@@ -8,6 +8,8 @@ class SystemResponse(BaseModel):
 
     cpu_percent: float
     temperature_celsius: float
+    temperature_fahrenheit: float
+    memory_percent: float
     disk_used_gb: float
     disk_total_gb: float
     uptime_seconds: float

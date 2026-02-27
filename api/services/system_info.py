@@ -66,6 +66,18 @@ def get_uptime() -> float:
     return time.time() - psutil.boot_time()
 
 
+def celsius_to_fahrenheit(celsius: float) -> float:
+    """Convert Celsius to Fahrenheit.
+
+    Args:
+        celsius: Temperature in Celsius.
+
+    Returns:
+        Temperature in Fahrenheit.
+    """
+    return (celsius * 9 / 5) + 32
+
+
 def get_memory_percent() -> float:
     """Get memory usage percentage.
 
