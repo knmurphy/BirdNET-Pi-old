@@ -95,8 +95,14 @@ function ErrorState({ message }: { message: string }) {
 export function LiveScreen() {
 	const { detections, isLoading, isError, error } = useLiveDetections();
 	const [newDetectionIds, setNewDetectionIds] = useState<Set<number>>(new Set());
+	const [mostRecentDetections, setMostRecentDetections] = useState<Detection[]>([]);
 
-	const mostRecentDetections = detections?.slice(0, 4) ?? [];
+	useEffect(() => {
+		if (detections && detections.length > 0) {
+			const recent = detections.slice(0, 4);
+			setMostRecentDetections(recent);
+		}
+	}, [detections]);
 
 	// Track new detections for animation
 	// When a detection arrives, mark it as "new" for a short period
