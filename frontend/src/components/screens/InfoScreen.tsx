@@ -42,8 +42,11 @@ function formatUptime(seconds: number): string {
 
 function getMapImageUrl(lat: number, lon: number): string {
   const zoom = 12;
-  const size = '400x200';
-  return `https://staticmap.marker.tech/?center=${lat},${lon}&zoom=${zoom}&size=${size}&markers=${lat},${lon},red-pushpin`;
+  const width = 400;
+  const height = 200;
+  // Yandex Static Maps API (free, no API key required)
+  // Note: Yandex uses lon,lat order (not lat,lon)
+  return `https://static-maps.yandex.ru/1.x/?ll=${lon},${lat}&size=${width},${height}&z=${zoom}&l=map&pt=${lon},${lat},pm2rdm`;
 }
 
 export function InfoScreen() {
