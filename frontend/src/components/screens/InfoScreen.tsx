@@ -46,7 +46,7 @@ function getMapImageUrl(lat: number, lon: number): string {
   const height = 200;
   // Yandex Static Maps API (free, no API key required)
   // Note: Yandex uses lon,lat order (not lat,lon)
-  return `https://static-maps.yandex.ru/1.x/?ll=${lon},${lat}&size=${width},${height}&z=${zoom}&l=map&pt=${lon},${lat},pm2rdm`;
+  return `https://static-maps.yandex.ru/1.x/?ll=${lon},${lat}&size=${width},${height}&z=${zoom}&l=map&pt=${lon},${lat},pm2rdm&lang=en_US`;
 }
 
 export function InfoScreen() {
