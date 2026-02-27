@@ -254,6 +254,114 @@
   stroke-width: 2;
 }
 
+/* Delete Modal */
+.delete-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: var(--z-modal);
+}
+
+.delete-modal-content {
+  position: relative;
+  width: 90%;
+  max-width: 400px;
+  background-color: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: 24px;
+}
+
+.delete-modal__close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+}
+
+.delete-modal__close:hover {
+  background-color: var(--bg3);
+  color: var(--text2);
+}
+
+.delete-modal__close:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.delete-modal__body {
+  text-align: center;
+}
+
+.delete-modal__message {
+  font-family: var(--font-body);
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--text);
+  margin: 0 0 20px;
+}
+
+.delete-modal__details {
+  font-size: 14px;
+  color: var(--text2);
+  margin-bottom: 24px;
+}
+
+.delete-modal__actions {
+  display: flex;
+  gap: var(--space-3);
+  justify-content: center;
+}
+
+.delete-modal__btn {
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.delete-modal__btn--cancel {
+  background-color: var(--bg3);
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+.delete-modal__btn--cancel:hover {
+  border-color: var(--text3);
+}
+
+.delete-modal__btn--confirm {
+  background-color: var(--red);
+  border: none;
+  color: var(--bg);
+}
+
+.delete-modal__btn--confirm:hover {
+  background-color: #c04040;
+}
+
+.delete-modal__btn:active {
+  transform: scale(0.95);
+}
+
 /* Classifier colored dot */
 .detection-card__classifier-dot {
   width: 6px;

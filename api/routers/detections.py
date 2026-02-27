@@ -30,6 +30,12 @@ class DetectionsResponse(BaseModel):
     has_more: bool
 
 
+class DeleteDetectionRequest(BaseModel):
+    """Request to delete a detection."""
+
+    detection_id: int
+
+
 @router.get("/detections", response_model=DetectionsResponse)
 async def get_detections(
     date_param: Optional[str] = Query(
@@ -285,6 +291,30 @@ async def get_species_detection_history(
         return SpeciesDetectionHistory(com_name=com_name, days=days, data=data)
 
     except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+@router.delete("/detections/{detection_id}", response_model=dict)
+async def delete_detection(detection_id: int):
+    """Delete a detection by ID."""
+    conn = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("DELETE FROM detections WHERE ROWID = ?", [detection_id])
+        
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail=f"Detection {detection_id} not found")
+        
+        conn.commit()
+        
+        return {"success": True, "message": f"Detection {detection_id} deleted"}
+        
+    except Exception as e:
+        conn.rollback()
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
     finally:
         if conn:
