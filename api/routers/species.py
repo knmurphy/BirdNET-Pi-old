@@ -6,7 +6,12 @@ from fastapi import APIRouter, HTTPException
 
 from api.services.database import get_connection
 from api.services.flickr_service import FlickrService
-from api.models.species import SpeciesSummary, SpeciesTodayResponse
+from api.models.species import (
+    SpeciesSummary,
+    SpeciesTodayResponse,
+    SpeciesStats,
+    SpeciesStatsResponse,
+)
 from api.models.flickr import FlickrImageResponse
 
 router = APIRouter()
@@ -28,7 +33,79 @@ async def get_species_image(com_name: str):
             license_url=image.license_url,
             source="flickr",
         )
-    raise HTTPException(status_code=404, detail=f"No image cached for species: {com_name}")
+    raise HTTPException(
+        status_code=404, detail=f"No image cached for species: {com_name}"
+    )
+
+
+@router.get("/species/stats", response_model=SpeciesStatsResponse)
+async def get_species_stats():
+    """Get full statistics for all species ever detected.
+
+    Returns species with best recording information (highest confidence
+    detection) and total counts across all time.
+    """
+    conn = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT
+                Com_Name,
+                Sci_Name,
+                COUNT(*) as detection_count,
+                MAX(Confidence) as max_confidence
+            FROM detections
+            GROUP BY Com_Name, Sci_Name
+            ORDER BY detection_count DESC
+        """)
+        species_rows = cursor.fetchall()
+
+        species_list = []
+        for row in species_rows:
+            com_name, sci_name, detection_count, max_confidence = row
+
+            cursor.execute(
+                """
+                SELECT Date, Time, File_Name
+                FROM detections
+                WHERE Com_Name = ? AND Confidence = ?
+                ORDER BY Date DESC, Time DESC
+                LIMIT 1
+            """,
+                [com_name, max_confidence],
+            )
+            best_row = cursor.fetchone()
+
+            if best_row:
+                best_date, best_time, best_file_name = best_row
+            else:
+                best_date, best_time, best_file_name = "", "", ""
+
+            species_list.append(
+                SpeciesStats(
+                    com_name=com_name,
+                    sci_name=sci_name,
+                    detection_count=detection_count,
+                    max_confidence=max_confidence,
+                    best_date=best_date,
+                    best_time=best_time,
+                    best_file_name=best_file_name,
+                )
+            )
+
+        return SpeciesStatsResponse(
+            species=species_list,
+            total_species=len(species_list),
+            generated_at=datetime.now().isoformat(),
+        )
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
 
 
 @router.get("/species/today", response_model=SpeciesTodayResponse)
@@ -42,7 +119,8 @@ async def get_species_today():
         cursor = conn.cursor()
 
         # Get all species with aggregations
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT
                 Com_Name,
                 Sci_Name,
@@ -53,7 +131,9 @@ async def get_species_today():
             WHERE Date = ?
             GROUP BY Com_Name, Sci_Name
             ORDER BY detection_count DESC
-        """, [today])
+        """,
+            [today],
+        )
         species_rows = cursor.fetchall()
 
         species_list = []
@@ -65,12 +145,15 @@ async def get_species_today():
             com_name, sci_name, detection_count, max_confidence, last_seen = row
 
             # Get hourly counts for this species
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT CAST(substr(Time, 1, 2) AS INTEGER) as hour, COUNT(*) as count
                 FROM detections
                 WHERE Date = ? AND Com_Name = ?
                 GROUP BY hour
-            """, [today, com_name])
+            """,
+                [today, com_name],
+            )
             hourly_rows = cursor.fetchall()
 
             hourly_counts = [0] * 24
@@ -87,15 +170,17 @@ async def get_species_today():
                 hours_since_first = current_hour - first_detection_hour
                 is_new = 0 <= hours_since_first <= 2
 
-            species_list.append(SpeciesSummary(
-                com_name=com_name,
-                sci_name=sci_name,
-                detection_count=detection_count,
-                max_confidence=max_confidence,
-                last_seen=last_seen,
-                hourly_counts=hourly_counts,
-                is_new=is_new,
-            ))
+            species_list.append(
+                SpeciesSummary(
+                    com_name=com_name,
+                    sci_name=sci_name,
+                    detection_count=detection_count,
+                    max_confidence=max_confidence,
+                    last_seen=last_seen,
+                    hourly_counts=hourly_counts,
+                    is_new=is_new,
+                )
+            )
 
         return SpeciesTodayResponse(
             species=species_list,

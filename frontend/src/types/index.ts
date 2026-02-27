@@ -70,6 +70,22 @@ export interface SpeciesDetectionHistory {
   data: SpeciesDetectionCount[];
 }
 
+export interface SpeciesStats {
+  com_name: string;
+  sci_name: string;
+  detection_count: number;
+  max_confidence: number;
+  best_date: string;
+  best_time: string;
+  best_file_name: string;
+}
+
+export interface SpeciesStatsResponse {
+  species: SpeciesStats[];
+  total_species: number;
+  generated_at: string;
+}
+
 // =============================================================================
 // Summary Types
 // =============================================================================

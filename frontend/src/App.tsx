@@ -15,6 +15,7 @@ import { Header } from './components/layout/Header';
 import { TabBar } from './components/layout/TabBar';
 import { LiveScreen } from './components/screens/LiveScreen';
 import { SpeciesScreen } from './components/screens/SpeciesScreen';
+import { SpeciesStatsScreen } from './components/screens/SpeciesStatsScreen';
 import { HistoryScreen } from './components/screens/HistoryScreen';
 import { StatsScreen } from './components/screens/StatsScreen';
 import { SettingsScreen } from './components/screens/SettingsScreen';
@@ -44,6 +45,7 @@ function App() {
               <Routes>
                 <Route path="/" element={<LiveScreen />} />
                 <Route path="/species" element={<SpeciesScreen />} />
+                <Route path="/species-stats" element={<SpeciesStatsScreen />} />
                 <Route path="/history" element={<HistoryScreen />} />
                 <Route path="/stats" element={<StatsScreen />} />
                 <Route path="/settings" element={<SettingsScreen />} />

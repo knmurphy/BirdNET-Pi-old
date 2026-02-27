@@ -15,8 +15,9 @@ interface TabConfig {
 const tabs: TabConfig[] = [
   { path: '/', label: 'Live', icon: '◉' },
   { path: '/species', label: 'Species', icon: '☰' },
+  { path: '/species-stats', label: 'Species Stats', icon: '📊' },
   { path: '/history', label: 'History', icon: '≡' },
-  { path: '/stats', label: 'Stats', icon: '∿' },
+  { path: '/stats', label: 'System', icon: '∿' },
   { path: '/settings', label: 'Settings', icon: '⚙' },
 ];
 
