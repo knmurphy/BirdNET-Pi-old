@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { useMapImage } from '../../hooks/useMapImage';
 import type { SystemResponse, SettingsResponse } from '../../types';
 import './Screens.css';
 
@@ -40,15 +41,6 @@ function formatUptime(seconds: number): string {
   return `${minutes}m`;
 }
 
-function getMapImageUrl(lat: number, lon: number): string {
-  const zoom = 11;
-  const width = 400;
-  const height = 200;
-  // Yandex Static Maps API (free, no API key required)
-  // Note: Yandex uses lon,lat order (not lat,lon)
-  return `https://static-maps.yandex.ru/1.x/?ll=${lon},${lat}&size=${width},${height}&z=${zoom}&l=map&pt=${lon},${lat},pm2rdm&lang=en_US`;
-}
-
 export function InfoScreen() {
   const { data: system, isLoading: loadingSystem, isError: isSystemError, error: systemError, refetch: refetchSystem } = useQuery({
     queryKey: ['system'],
@@ -61,6 +53,12 @@ export function InfoScreen() {
     queryFn: fetchSettings,
     staleTime: 60_000,
   });
+
+  // Fetch and cache map image based on location
+  const { data: mapImageDataUrl } = useMapImage(
+    settings?.latitude ?? null,
+    settings?.longitude ?? null
+  );
 
   const isLoading = loadingSystem || loadingSettings;
   const isError = isSystemError || isSettingsError;
@@ -166,14 +164,15 @@ export function InfoScreen() {
           <section className="info-section">
             <h2 className="info-section__title">Station Settings</h2>
             <div className="settings-map">
-              <img
-                src={getMapImageUrl(settings.latitude, settings.longitude)}
-                alt="Station location map"
-                className="settings-map__image"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).style.display = 'none';
-                }}
-              />
+              {mapImageDataUrl ? (
+                <img
+                  src={mapImageDataUrl}
+                  alt="Station location map"
+                  className="settings-map__image"
+                />
+              ) : (
+                <div className="settings-map__placeholder">Loading map...</div>
+              )}
             </div>
             <div className="settings-coords">
               <span>{settings.latitude.toFixed(4)}°N, {settings.longitude.toFixed(4)}°W</span>
