@@ -98,11 +98,7 @@ async def restart_service(req: RestartRequest):
             check=True,
         )
         message = "Service restart initiated"
-    except (
-        subprocess.CalledProcessError,
-        subprocess.TimeoutExpired,
-        FileNotFoundError,
-    ):
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError):
         message = "Restart command issued (may require elevated privileges)"
 
     return RestartResponse(
