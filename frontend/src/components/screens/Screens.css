@@ -247,6 +247,40 @@
   padding-bottom: calc(var(--space-8) + 60px + env(safe-area-inset-bottom));
 }
 
+/* Live feed header with summary stats */
+.live-feed__header {
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface2);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--space-2);
+}
+
+.live-feed__summary {
+  display: flex;
+  gap: var(--space-6);
+}
+
+.live-feed__summary-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.live-feed__summary-value {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  color: var(--text1);
+  line-height: 1;
+}
+
+.live-feed__summary-label {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  color: var(--text3);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
 /* Overflow indicator when more detections exist */
 .live-feed__overflow {
   font-family: var(--font-mono);
