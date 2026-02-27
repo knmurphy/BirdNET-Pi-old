@@ -5,7 +5,6 @@
 
 import { useState, useEffect } from 'react';
 import { useLiveDetections } from '../../hooks/useDetections';
-import { useTodaySummary } from '../../hooks/useTodaySummary';
 import { DetectionCard } from '../DetectionCard';
 import './Screens.css';
 
@@ -97,8 +96,7 @@ export function LiveScreen() {
 	const { detections, isLoading, isError, error } = useLiveDetections();
 	const [newDetectionIds, setNewDetectionIds] = useState<Set<number>>(new Set());
 
-
-	const { data: summary } = useTodaySummary();
+	const mostRecentDetections = detections?.slice(0, 4) ?? [];
 
 	// Track new detections for animation
 	// When a detection arrives, mark it as "new" for a short period
@@ -164,37 +162,50 @@ export function LiveScreen() {
 
 	return (
 		<div className="screen screen--live">
-		{/* Header with summary stats */}
-		<div className="live-feed__header">
-			<div className="live-feed__summary">
-				<div className="live-feed__summary-item">
-					<div className="live-feed__summary-value">{summary?.total_detections ?? 0}</div>
-					<div className="live-feed__summary-label">Detections</div>
-				</div>
-				<div className="live-feed__summary-item">
-					<div className="live-feed__summary-value">{summary?.species_count ?? 0}</div>
-					<div className="live-feed__summary-label">Species</div>
-				</div>
-			</div>
-		</div>
-
-			<div className="live-feed" role="feed" aria-label="Live detection feed">
-				{visibleDetections.map((detection) => (
-					<DetectionCard
-						key={detection.id}
-						detection={detection}
-						isNew={newDetectionIds.has(detection.id)}
-						ageCategory={getAgeCategory(detection.iso8601)}
-					/>
-				))}
+			{/* Today Header */}
+			<div className="live-header">
+				<h1 className="live-header__title">Today</h1>
+				<p className="live-header__date">{new Date().toLocaleDateString()}</p>
 			</div>
 
-			{/* Show count indicator if we have more detections than shown */}
-			{detections.length > MAX_VISIBLE_DETECTIONS && (
-				<div className="live-feed__overflow">
-					+{detections.length - MAX_VISIBLE_DETECTIONS} more today
-				</div>
+			{/* Most Recent Section */}
+			{mostRecentDetections.length > 0 && (
+				<section className="live-recent">
+					<h2 className="live-recent__title">Most Recent</h2>
+					<div className="live-recent__list">
+						{mostRecentDetections.map((detection) => (
+							<DetectionCard
+								key={detection.id}
+								detection={detection}
+								isNew={newDetectionIds.has(detection.id)}
+								ageCategory={getAgeCategory(detection.iso8601)}
+							/>
+						))}
+					</div>
+				</section>
 			)}
+
+			{/* Today's Activity */}
+			<section className="live-activity">
+				<h2 className="live-activity__title">Activity</h2>
+				<div className="live-feed" role="feed" aria-label="Live detection feed">
+					{visibleDetections.map((detection) => (
+						<DetectionCard
+							key={detection.id}
+							detection={detection}
+							isNew={newDetectionIds.has(detection.id)}
+							ageCategory={getAgeCategory(detection.iso8601)}
+						/>
+					))}
+				</div>
+
+				{/* Show count indicator if we have more detections than shown */}
+				{detections.length > MAX_VISIBLE_DETECTIONS && (
+					<div className="live-feed__overflow">
+						+{detections.length - MAX_VISIBLE_DETECTIONS} more today
+					</div>
+				)}
+			</section>
 		</div>
 	);
 }

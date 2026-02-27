@@ -332,6 +332,60 @@
 }
 
 /* =========================================
+ * Live Screen Header & Recent Section
+ * ========================================= */
+
+.live-header {
+  padding: var(--space-4) 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: var(--space-6);
+}
+
+.live-header__title {
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  color: var(--text);
+  margin: 0;
+}
+
+.live-header__date {
+  font-size: var(--text-base);
+  color: var(--text3);
+  margin: var(--space-1) 0 0 0;
+}
+
+.live-recent {
+  margin-bottom: var(--space-8);
+  padding: var(--space-6);
+  border: 2px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: var(--surface2);
+}
+
+.live-recent__title {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--text);
+  margin: 0 0 var(--space-4) 0;
+}
+
+.live-recent__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.live-activity__title {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--text);
+  margin: 0 0 var(--space-4) 0;
+}
+
+/* =========================================
  * Settings Screen
  * ========================================= */
 
