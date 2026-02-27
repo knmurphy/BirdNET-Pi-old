@@ -165,6 +165,39 @@ npm run preview
 - **Routes**: GET/POST/PUT/DELETE; async functions for I/O operations
 - **Error handling**: HTTPException with appropriate status codes (400, 404, 500)
 
+## Deployment Workflow
+
+**IMPORTANT**: This project runs on a remote Raspberry Pi. Code changes are NOT deployed until you run the deploy script.
+
+### Deployment Scripts
+
+| Script | Use Case |
+|--------|----------|
+| `./deploy.sh` | Frontend-only changes (builds React, syncs dist) |
+| `./deploy-full.sh` | Full deploy (frontend + backend API changes) |
+### Required Workflow
+
+**ALWAYS follow this order:**
+
+1. **Make code changes**
+2. **Commit**: `git add -A && git commit -m "..."`
+3. **Push**: `git push` - MUST succeed before deploying
+4. **Deploy**: `./deploy-full.sh` (or `./deploy.sh` for frontend-only)
+
+### Critical Rules
+
+- **git push ≠ deployed** - Pushing only updates the remote repo
+- **Deploy script runs on the Pi** - It pulls from git and restarts services
+- **Backend changes need deploy-full.sh** - Use this for API/config changes
+- **Frontend-only can use deploy.sh** - Faster, doesn't restart FastAPI
+
+### What Gets Deployed
+
+The Pi runs:
+- FastAPI backend at `http://10.0.0.177:8003/api/*`
+- React PWA at `http://10.0.0.177:8003/`
+- Old PHP system at `http://10.0.0.177/` (legacy, untouched)
+
 ## Landing the Plane (Session Completion)
 
 **When ending a work session**, you MUST complete ALL steps below. Work is NOT complete until `git push` succeeds.
