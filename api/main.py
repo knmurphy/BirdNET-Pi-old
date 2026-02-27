@@ -66,14 +66,15 @@ def serve_react_app(request_path: str):
         raise HTTPException(status_code=503, detail="Frontend not built. Run: cd frontend && npm run build")
 
     # Serve PWA manifest (both manifest.json and manifest.webmanifest)
-    if request_path in ["/manifest.json", "/manifest.webmanifest"]:
+    if request_path in ["manifest.json", "manifest.webmanifest"]:
         # Try both manifest files
         for manifest_name in ["manifest.webmanifest", "manifest.json"]:
             manifest_path = os.path.join(FRONTEND_DIST, manifest_name)
             if os.path.exists(manifest_path):
                 return FileResponse(manifest_path, media_type="application/json")
+
     # Serve service worker files
-    if request_path in ["/sw.js", "/registerSW.js"] or request_path.startswith("/workbox-"):
+    if request_path in ["sw.js", "registerSW.js"] or request_path.startswith("workbox-"):
         # Try to find the service worker file
         sw_patterns = ["sw.js", "registerSW.js", "workbox-*.js"]
         import glob
@@ -82,7 +83,10 @@ def serve_react_app(request_path: str):
             if matches:
                 return FileResponse(matches[0], media_type="application/javascript")
     # Serve favicon
-    if request_path == "/favicon.ico":
+    if request_path == "favicon.ico":
+        favicon_path = os.path.join(FRONTEND_DIST, "vite.svg")  # Fallback to the vite SVG
+        if os.path.exists(favicon_path):
+            return FileResponse(favicon_path)
         favicon_path = os.path.join(FRONTEND_DIST, "vite.svg")  # Fallback to the vite SVG
         if os.path.exists(favicon_path):
             return FileResponse(favicon_path)
