@@ -1,0 +1,94 @@
+name: Build and Deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Upload frontend artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist/
+          retention-days: 1
+
+  deploy-to-pi:
+    needs: build-frontend
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download frontend artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist/
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.PI_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.PI_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Pull latest code on Pi
+        run: |
+          ssh ${{ secrets.PI_USER }}@${{ secrets.PI_HOST }} << 'EOF'
+            cd ~/BirdNET-Pi
+            git fetch origin
+            git reset --hard origin/main
+          EOF
+
+      - name: Deploy frontend to Pi
+        run: |
+          rsync -avz --delete \
+            frontend/dist/ \
+            ${{ secrets.PI_USER }}@${{ secrets.PI_HOST }}:~/BirdNET-Pi/frontend-dist/
+
+      - name: Restart API on Pi
+        run: |
+          ssh ${{ secrets.PI_USER }}@${{ secrets.PI_HOST }} << 'EOF'
+            pkill -f 'api.main:app' || true
+            sleep 2
+
+            cd ~/BirdNET-Pi
+            export PYTHONPATH=/home/knmurphy/BirdNET-Pi
+            export FRONTEND_DIST=/home/knmurphy/BirdNET-Pi/frontend-dist
+            export BIRDNET_DB_PATH=/home/knmurphy/BirdNET-Pi/scripts/birds.db
+            export BIRDNET_RECORDINGS_PATH=/home/knmurphy/BirdSongs
+
+            /home/knmurphy/.pyenv/versions/3.12.12/bin/python -m uvicorn api.main:app \
+              --host 0.0.0.0 --port 8003 --log-level info > /tmp/api.log 2>&1 &
+
+            echo "API restarted with PID: $!"
+          EOF
+
+      - name: Verify deployment
+        run: |
+          sleep 3
+          curl -s -o /dev/null -w "%{http_code}" http://${{ secrets.PI_HOST }}:8003/health || echo "Health check failed"

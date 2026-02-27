@@ -46,7 +46,6 @@ log_info "Step 3: Deploying frontend to remote..."
 rsync -avz --delete \
     --exclude 'node_modules' \
     --exclude '.git' \
-    --exclude 'dist' \
     --exclude 'src' \
     --exclude 'public' \
     --exclude 'vite.config.ts' \
