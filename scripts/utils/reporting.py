@@ -41,7 +41,21 @@ def extract_safe(in_file, out_file, start, stop):
         ex_len = 6
     spacer = (ex_len - 3) / 2
     safe_start = max(0, start - spacer)
-    safe_stop = min(conf.getint('RECORDING_LENGTH'), stop + spacer)
+
+    # Get actual audio duration instead of relying on config (which may be outdated)
+    try:
+        info = soundfile.info(in_file)
+        audio_duration = info.duration
+    except Exception:
+        # Fallback to config if we can't read the file
+        audio_duration = conf.getint('RECORDING_LENGTH')
+
+    safe_stop = min(audio_duration, stop + spacer)
+
+    # Validate extraction range - skip if start >= stop (invalid)
+    if safe_start >= safe_stop:
+        log.warning('Invalid extraction range: start=%.2f >= stop=%.2f for %s. Skipping extraction.', safe_start, safe_stop, in_file)
+        return
 
     extract(in_file, out_file, safe_start, safe_stop)
 
