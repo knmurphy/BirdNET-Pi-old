@@ -480,3 +480,48 @@
   font-size: var(--text-xs);
   color: var(--text3);
 }
+
+/* =========================================
+ * Info Screen
+ * ========================================= */
+
+.screen--info {
+  padding: 1rem;
+}
+
+.info-section {
+  margin-bottom: 2rem;
+}
+
+.info-section__title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  color: var(--color-text-primary);
+}
+
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.info-item {
+  padding: 1rem;
+  background: var(--color-surface-secondary);
+  border-radius: 8px;
+}
+
+.info-item__label {
+  display: block;
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+  margin-bottom: 0.25rem;
+}
+
+.info-item__value {
+  display: block;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
