@@ -637,4 +637,86 @@
   gap: var(--space-2);
   flex-wrap: wrap;
   justify-content: center;
+
+/* =========================================
+ * Mobile Responsive Styles
+ * ========================================= */
+
+@media (max-width: 640px) {
+  /* Force 2-column grids on mobile */
+  .info-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.5rem;
+  }
+
+  .settings-grid {
+    gap: 0.5rem;
+  }
+
+  .info-item {
+    padding: 0.5rem;
+  }
+
+  .settings-item {
+    padding: 0.5rem;
+    gap: 0.125rem;
+  }
+
+  .info-item__label {
+    font-size: 0.625rem;
+    margin-bottom: 0.125rem;
+  }
+
+  .info-item__value {
+    font-size: 0.875rem;
+  }
+
+  .settings-item__label {
+    font-size: 0.625rem;
+  }
+
+  .settings-item__value {
+    font-size: 0.875rem;
+  }
+
+  .settings-item__value--mono {
+    font-size: 0.75rem;
+  }
+
+  .info-section__title {
+    font-size: 0.875rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .info-section {
+    margin-bottom: 1rem;
+  }
+
+  .settings-map__image,
+  .settings-map__placeholder {
+    height: 120px;
+  }
+
+  .settings-map__placeholder {
+    font-size: 0.75rem;
+  }
+
+  .settings-coords {
+    font-size: 0.75rem;
+    margin-top: 0.25rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .screen--info {
+    padding: 0.5rem;
+  }
+
+  /* Reorder: Settings first, System second */
+  .info-section:first-of-type {
+    order: 2;
+  }
+
+  .info-section:last-of-type {
+    order: 1;
+  }
 }
