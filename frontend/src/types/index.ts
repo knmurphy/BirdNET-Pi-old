@@ -86,6 +86,40 @@ export interface SpeciesStatsResponse {
   generated_at: string;
 }
 
+export interface FlickrImage {
+  image_id: string;
+  sci_name: string;
+  com_name: string;
+  image_url: string;
+  title: string | null;
+  author_url: string | null;
+  license_url: string | null;
+}
+
+export interface FlickrImageResponse {
+  sci_name: string;
+  com_name: string;
+  image_url: string;
+  title: string | null;
+  author_url: string | null;
+  license_url: string | null;
+  source: string;
+}
+
+export interface BlacklistRequest {
+  image_id: string;
+  reason?: string;
+}
+
+export interface UnblacklistRequest {
+  image_id: string;
+}
+
+export interface BlacklistResponse {
+  success: boolean;
+  message: string;
+}
+
 // =============================================================================
 // Summary Types
 // =============================================================================

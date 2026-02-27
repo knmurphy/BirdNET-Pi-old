@@ -12,7 +12,12 @@ from api.models.species import (
     SpeciesStats,
     SpeciesStatsResponse,
 )
-from api.models.flickr import FlickrImageResponse
+from api.models.flickr import (
+    FlickrImageResponse,
+    BlacklistRequest,
+    UnblacklistRequest,
+    BlacklistResponse,
+)
 
 router = APIRouter()
 
@@ -192,3 +197,46 @@ async def get_species_today():
     finally:
         if conn:
             conn.close()
+
+@router.post("/flickr/blacklist", response_model=BlacklistResponse)
+async def blacklist_flickr_image(req: BlacklistRequest):
+    """Add a Flickr image ID to the blacklist."""
+    flickr = FlickrService()
+
+    if not req.image_id:
+        raise HTTPException(status_code=400, detail="image_id is required")
+
+    success = flickr.blacklist_image(req.image_id, req.reason)
+
+    if success:
+        return BlacklistResponse(
+            success=True,
+            message=f"Image {req.image_id} added to blacklist"
+        )
+    else:
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to add image to blacklist"
+        )
+
+
+@router.post("/flickr/unblacklist", response_model=BlacklistResponse)
+async def unblacklist_flickr_image(req: UnblacklistRequest):
+    """Remove a Flickr image ID from the blacklist."""
+    flickr = FlickrService()
+
+    if not req.image_id:
+        raise HTTPException(status_code=400, detail="image_id is required")
+
+    success = flickr.unblacklist_image(req.image_id)
+
+    if success:
+        return BlacklistResponse(
+            success=True,
+            message=f"Image {req.image_id} removed from blacklist"
+        )
+    else:
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to remove image from blacklist"
+        )
