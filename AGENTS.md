@@ -156,6 +156,7 @@ npm run preview
 - **Props**: Define interfaces above components with inline comments for props
 - **Functions**: Arrow functions for components; regular functions for utilities
 - **State**: React useState/useReducer for local, TanStack Query for server state
+- **Icons**: Do NOT use emoji as icons. Use SVG icons for consistent, accessible, and professional appearance
 
 ### Backend API
 - **FastAPI routers**: One file per domain (detections.py, species.py, system.py)

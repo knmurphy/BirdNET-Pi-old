@@ -83,6 +83,12 @@
   object-fit: cover;
   flex-shrink: 0;
   background-color: var(--bg3);
+  cursor: pointer;
+  transition: transform var(--transition-fast);
+}
+
+.detection-card__image:hover {
+  transform: scale(1.05);
 }
 
 /* Info section (right of image) */
