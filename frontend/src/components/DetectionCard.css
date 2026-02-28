@@ -56,22 +56,19 @@
 .detection-card__trading-frame {
   display: flex;
   flex-direction: column;
-  aspect-ratio: 1;
   width: 100%;
 }
 
 .detection-card__trading-image {
   position: relative;
-  flex: 1;
-  min-height: 0;
+  width: 100%;
   background-color: var(--bg3);
 }
 
 .detection-card__trading-img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
-  object-position: top center;
+  object-fit: contain;
   display: block;
   cursor: pointer;
   transition: transform var(--transition-slow);

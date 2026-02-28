@@ -7,7 +7,7 @@ import type { Detection, SpeciesDetectionHistory } from '../types';
 import { useAudio } from '../hooks/useAudio';
 import { useSpeciesImage } from '../hooks/useSpeciesImage';
 import { formatConfidence, getConfidenceColor } from '../hooks/useDetections';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { SpeciesChartDialog } from './SpeciesChartDialog';
 import { ImageModal } from './ImageModal';
 import './DetectionCard.css';
@@ -98,6 +98,12 @@ export function DetectionCard({
 	const [isChartOpen, setIsChartOpen] = useState(false);
 	const [localIsDeleteDialogOpen, setLocalIsDeleteDialogOpen] = useState(false);
 	const [isImageModalOpen, setIsImageModalOpen] = useState(false);
+	const [imageAspectRatio, setImageAspectRatio] = useState<number | null>(null);
+
+	// Reset aspect ratio when image URL changes (e.g. different species)
+	useEffect(() => {
+		setImageAspectRatio(null);
+	}, [image?.image_url]);
 
 	const layerClassName = position < HIGHLIGHT_COUNT ? '' : `detection-card--layered detection-card--layer-${Math.min(Math.floor((position - HIGHLIGHT_COUNT) / 10), 3)}`;
 
@@ -231,13 +237,20 @@ export function DetectionCard({
 					aria-label={`${detection.com_name}, confidence ${formatConfidence(detection.confidence)}, ${playing ? 'stop audio' : 'play audio'}`}
 				>
 					<div className="detection-card__trading-frame">
-						<div className="detection-card__trading-image">
+						<div
+							className="detection-card__trading-image"
+							style={{ aspectRatio: imageAspectRatio ?? 1 }}
+						>
 							{image ? (
 								<img
 									src={image.image_url}
 									alt={detection.com_name}
 									className="detection-card__trading-img"
 									loading="lazy"
+									onLoad={(e) => {
+										const img = e.currentTarget;
+										setImageAspectRatio(img.naturalWidth / img.naturalHeight);
+									}}
 									onClick={(e) => { e.stopPropagation(); setIsImageModalOpen(true); }}
 								/>
 							) : (
