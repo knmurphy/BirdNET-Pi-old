@@ -14,27 +14,6 @@ const MAX_VISIBLE_DETECTIONS = 100;
 /** Animation duration for new detection highlight (ms) */
 const NEW_DETECTION_DURATION = 500;
 
-/** Age thresholds for fading (in seconds) */
-const AGE_THRESHOLD_MEDIUM = 60; // 1 minute
-const AGE_THRESHOLD_OLD = 300; // 5 minutes
-
-/**
- * Calculate age category for a detection based on its time
- */
-function getAgeCategory(detectionTime: string): 'recent' | 'medium' | 'old' {
-	try {
-		const detectionDate = new Date(detectionTime);
-		const now = new Date();
-		const ageSeconds = (now.getTime() - detectionDate.getTime()) / 1000;
-		
-		if (ageSeconds >= AGE_THRESHOLD_OLD) return 'old';
-		if (ageSeconds >= AGE_THRESHOLD_MEDIUM) return 'medium';
-		return 'recent';
-	} catch {
-		return 'recent';
-	}
-}
-
 /**
  * Loading skeleton cards
  */
@@ -108,16 +87,9 @@ function ErrorState({ message }: { message: string }) {
 export function LiveScreen() {
 	const { detections, isLoading, isError, error } = useLiveDetections();
 	const [newDetectionIds, setNewDetectionIds] = useState<Set<number>>(new Set());
-	const [tick, setTick] = useState(0);
 	const seenIdsRef = useRef<Set<number>>(new Set());
 
 	const mostRecentDetections = detections.slice(0, 4);
-
-	// Recalculate age categories every 60s so dimming updates without re-render
-	useEffect(() => {
-		const id = setInterval(() => setTick((t) => t + 1), 60_000);
-		return () => clearInterval(id);
-	}, []);
 
 	// Track new detections for animation
 	useEffect(() => {
@@ -181,7 +153,7 @@ export function LiveScreen() {
 	}
 
 	return (
-		<div className="screen screen--live" data-age-tick={tick}>
+		<div className="screen screen--live">
 			{/* Today Header */}
 			<div className="live-header">
 				<h1 className="live-header__title">Today</h1>
@@ -193,12 +165,12 @@ export function LiveScreen() {
 				<section className="live-recent">
 					<h2 className="live-recent__title">Most Recent</h2>
 					<div className="live-recent__list">
-						{mostRecentDetections.map((detection) => (
+						{mostRecentDetections.map((detection, i) => (
 							<DetectionCard
 								key={detection.id}
 								detection={detection}
 								isNew={newDetectionIds.has(detection.id)}
-								ageCategory={getAgeCategory(detection.iso8601)}
+								position={i}
 							/>
 						))}
 					</div>
@@ -209,12 +181,12 @@ export function LiveScreen() {
 			<section className="live-activity">
 				<h2 className="live-activity__title">Activity</h2>
 				<div className="live-feed" role="feed" aria-label="Live detection feed">
-					{activityDetections.map((detection) => (
+					{activityDetections.map((detection, i) => (
 						<DetectionCard
 							key={detection.id}
 							detection={detection}
 							isNew={newDetectionIds.has(detection.id)}
-							ageCategory={getAgeCategory(detection.iso8601)}
+							position={4 + i}
 						/>
 					))}
 				</div>

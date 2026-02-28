@@ -23,8 +23,8 @@ export interface DetectionCardProps {
 	onClick?: () => void;
 	/** Whether this is a newly arrived detection (triggers animation) */
 	isNew?: boolean;
-	/** Age category for time-based fading */
-	ageCategory?: 'recent' | 'medium' | 'old';
+	/** Position in list (0-based). Top 5 stay full opacity; rest get layered/faded appearance. */
+	position?: number;
 	/** External chart dialog state (for shared dialog management) */
 	chartData?: SpeciesDetectionHistory | null;
 	onOpenChart?: (data: SpeciesDetectionHistory) => void;
@@ -39,6 +39,9 @@ export interface DetectionCardProps {
 /**
  * Get default classifier color based on classifier ID
  */
+/** Top N positions stay full opacity; rest get layered/faded appearance */
+const HIGHLIGHT_COUNT = 5;
+
 function getDefaultClassifierColor(classifier: string): string {
 	switch (classifier) {
 		case 'birdnet':
@@ -74,7 +77,7 @@ export function DetectionCard({
 	// thresholds, // Unused parameter - remove to fix TS6133 error
 	onClick,
 	isNew = false,
-	ageCategory = 'recent',
+	position = 0,
 	chartData,
 	onOpenChart,
 	onCloseChart,
@@ -90,7 +93,7 @@ export function DetectionCard({
 	const [localIsDeleteDialogOpen, setLocalIsDeleteDialogOpen] = useState(false);
 	const [isImageModalOpen, setIsImageModalOpen] = useState(false);
 
-	const ageClassName = ageCategory === 'recent' ? '' : `detection-card--age-${ageCategory}`;
+	const layerClassName = position < HIGHLIGHT_COUNT ? '' : `detection-card--layered detection-card--layer-${Math.min(Math.floor((position - HIGHLIGHT_COUNT) / 10), 3)}`;
 
 	const handleClick = () => {
 		toggle();
@@ -173,7 +176,7 @@ export function DetectionCard({
 	return (
 		<>
 			<article
-				className={`detection-card ${isNew ? 'detection-card--new' : ''} ${ageClassName}`.trim()}
+				className={`detection-card ${isNew ? 'detection-card--new' : ''} ${layerClassName}`.trim()}
 				onClick={handleClick}
 				role="button"
 				tabIndex={0}

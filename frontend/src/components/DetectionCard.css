@@ -44,17 +44,25 @@
   animation: slideDown 200ms ease-out;
 }
 
-/* Time-based fading for older detections */
-.detection-card--age-recent {
-  opacity: 1;
+/* Position-based layered appearance: top 5 full, rest progressively faded */
+.detection-card--layered {
+  /* Base for cards below the fold */
 }
 
-.detection-card--age-medium {
-  opacity: 0.75;
+.detection-card--layer-0 {
+  opacity: 0.88;
 }
 
-.detection-card--age-old {
-  opacity: 0.5;
+.detection-card--layer-1 {
+  opacity: 0.76;
+}
+
+.detection-card--layer-2 {
+  opacity: 0.64;
+}
+
+.detection-card--layer-3 {
+  opacity: 0.55;
 }
 
 @keyframes slideDown {
