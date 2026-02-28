@@ -18,4 +18,3 @@ psutil>=5.9.0
 # Testing
 pytest>=7.4.0
 httpx>=0.26.0
-starlette==0.27.0

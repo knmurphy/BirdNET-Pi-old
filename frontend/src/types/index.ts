@@ -153,6 +153,14 @@ export interface SystemResponse {
 // Settings Types
 // =============================================================================
 
+export interface LocationWeatherResponse {
+  city: string;
+  temp_c: number;
+  condition: string;
+  latitude: number;
+  longitude: number;
+}
+
 export interface SettingsResponse {
   audio_path: string;
   latitude: number;

@@ -38,6 +38,12 @@
   gap: var(--space-3);
 }
 
+.header-meta {
+  font-size: var(--text-xs);
+  color: var(--text3);
+  font-variant-numeric: tabular-nums;
+}
+
 .header-time {
   font-size: var(--text-sm);
   color: var(--text2);

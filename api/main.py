@@ -13,7 +13,7 @@ from fastapi.exceptions import HTTPException
 import os
 
 
-from api.routers import detections, species, system, classifiers, settings_router, events, audio, spectrogram
+from api.routers import detections, species, system, classifiers, settings_router, events, audio, spectrogram, location_weather
 
 
 # App configuration
@@ -49,6 +49,7 @@ app.include_router(settings_router.router, prefix="/api", tags=["settings"])
 app.include_router(events.router, prefix="/api", tags=["events"])
 app.include_router(audio.router, prefix="/api", tags=["audio"])
 app.include_router(spectrogram.router, prefix="/api", tags=["spectrogram"])
+app.include_router(location_weather.router, prefix="/api", tags=["location-weather"])
 
 
 # ============================================
