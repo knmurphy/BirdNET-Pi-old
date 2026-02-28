@@ -6,7 +6,7 @@
 import type { Detection, SpeciesDetectionHistory } from '../types';
 import { useAudio } from '../hooks/useAudio';
 import { useSpeciesImage } from '../hooks/useSpeciesImage';
-import { formatConfidence } from '../hooks/useDetections';
+import { formatConfidence, getConfidenceColor } from '../hooks/useDetections';
 import { useState } from 'react';
 import { SpeciesChartDialog } from './SpeciesChartDialog';
 import { ImageModal } from './ImageModal';
@@ -25,6 +25,8 @@ export interface DetectionCardProps {
 	isNew?: boolean;
 	/** Position in list (0-based). Top 5 stay full opacity; rest get layered/faded appearance. */
 	position?: number;
+	/** Compact layout: percentage + dot only, no confidence bar (for Most Recent) */
+	compact?: boolean;
 	/** External chart dialog state (for shared dialog management) */
 	chartData?: SpeciesDetectionHistory | null;
 	onOpenChart?: (data: SpeciesDetectionHistory) => void;
@@ -78,6 +80,7 @@ export function DetectionCard({
 	onClick,
 	isNew = false,
 	position = 0,
+	compact = false,
 	chartData,
 	onOpenChart,
 	onCloseChart,
@@ -241,20 +244,33 @@ export function DetectionCard({
 					</div>
 					<p className="detection-card__scientific-name">{detection.sci_name}</p>
 
-						<div className="detection-card__confidence">
-							<div className="detection-card__confidence-bar">
-								<div
-									className="detection-card__confidence-fill"
-									style={{
-										width: `${detection.confidence * 100}%`,
-										backgroundColor: classifierColor ?? getDefaultClassifierColor(detection.classifier),
-									}}
+						{compact ? (
+							<div className="detection-card__confidence-compact">
+								<span
+									className="detection-card__confidence-dot"
+									style={{ backgroundColor: getConfidenceColor(detection.confidence) }}
+									aria-hidden="true"
 								/>
+								<span className="detection-card__confidence-value">
+									{formatConfidence(detection.confidence)}
+								</span>
 							</div>
-							<span className="detection-card__confidence-value">
-								{formatConfidence(detection.confidence)}
-							</span>
-						</div>
+						) : (
+							<div className="detection-card__confidence">
+								<div className="detection-card__confidence-bar">
+									<div
+										className="detection-card__confidence-fill"
+										style={{
+											width: `${detection.confidence * 100}%`,
+											backgroundColor: classifierColor ?? getDefaultClassifierColor(detection.classifier),
+										}}
+									/>
+								</div>
+								<span className="detection-card__confidence-value">
+									{formatConfidence(detection.confidence)}
+								</span>
+							</div>
+						)}
 
 						<div className="detection-card__footer">
 							<span className="detection-card__classifier">

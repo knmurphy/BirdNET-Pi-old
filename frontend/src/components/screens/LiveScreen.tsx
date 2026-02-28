@@ -171,6 +171,7 @@ export function LiveScreen() {
 								detection={detection}
 								isNew={newDetectionIds.has(detection.id)}
 								position={i}
+								compact
 							/>
 						))}
 					</div>
