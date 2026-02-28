@@ -164,3 +164,43 @@
   background: var(--accent);
   color: white;
 }
+
+/* =========================================
+ * Mobile: prevent text squeezing
+ * ========================================= */
+
+@media (max-width: 640px) {
+  .species-row {
+    padding: var(--space-3) var(--space-3);
+  }
+
+  .species-row__main {
+    flex-wrap: wrap;
+  }
+
+  /* Names get full row width; count + actions wrap to second row */
+  .species-row__info {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .species-row__right {
+    flex-basis: 100%;
+    margin-left: 0;
+    padding-left: calc(48px + var(--space-3));
+    justify-content: flex-start;
+    gap: var(--space-3);
+  }
+
+  /* Wrap long names by word, not character */
+  .species-row__common-name,
+  .species-row__scientific-name {
+    overflow-wrap: break-word;
+    word-break: normal;
+  }
+
+  .species-row__meta {
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+}
