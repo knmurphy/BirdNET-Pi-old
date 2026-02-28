@@ -161,6 +161,6 @@
 }
 
 .species-badge--new {
-  background: var(--color-accent-primary);
+  background: var(--accent);
   color: white;
 }

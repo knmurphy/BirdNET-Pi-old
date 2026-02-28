@@ -12,12 +12,15 @@ interface SpeciesChartDialogProps {
   isOpen: boolean;
   onClose: () => void;
   species: SpeciesDetectionHistory | null;
+  /** Called when days selector changes; updates parent state so dialog stays open with new data */
+  onDaysChange?: (species: SpeciesDetectionHistory) => void;
 }
 
 export function SpeciesChartDialog({
   isOpen,
   onClose,
   species,
+  onDaysChange,
 }: SpeciesChartDialogProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<Chart | null>(null);
@@ -26,17 +29,21 @@ export function SpeciesChartDialog({
   const dayOptions = [30, 180, 360, 720, 1080];
 
   const handleDaysChange = async (newDays: number) => {
-    if (!species || !onClose) return;
+    if (!species) return;
 
     const response = await fetch(
       `/api/detections/species/history?com_name=${encodeURIComponent(species.com_name)}&days=${newDays}`
     );
     const newSpecies: SpeciesDetectionHistory = await response.json();
-    onClose();
 
-    window.dispatchEvent(
-      new CustomEvent('open-chart', { detail: { species: newSpecies } })
-    );
+    if (onDaysChange) {
+      onDaysChange(newSpecies);
+    } else {
+      onClose();
+      window.dispatchEvent(
+        new CustomEvent('open-chart', { detail: { species: newSpecies } })
+      );
+    }
   };
 
   useEffect(() => {

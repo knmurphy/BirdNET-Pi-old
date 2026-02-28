@@ -15,6 +15,15 @@
   --text2: #9A9B8A;
   --text3: #5A5C4E;
   --accent: #C8E6A0;
+
+  /* Aliases for compatibility */
+  --surface2: var(--bg2);
+  --text1: var(--text);
+  --text-muted: var(--text3);
+  --color-text-primary: var(--text);
+  --color-text-secondary: var(--text2);
+  --color-surface-secondary: var(--bg2);
+  --color-accent-primary: var(--accent);
   --amber: #E8C547;
   --red: #E05252;
 
@@ -46,6 +55,7 @@
   --radius-sm: 4px;
   --radius-md: 8px;
   --radius-lg: 12px;
+  --radius-xl: 16px;
   --radius-full: 9999px;
 
   /* =========================================
@@ -60,6 +70,7 @@
   --text-base: 14px;
   --text-lg: 17px;
   --text-xl: 20px;
+  --text-2xl: 24px;
 
   --leading-tight: 1.25;
   --leading-normal: 1.5;

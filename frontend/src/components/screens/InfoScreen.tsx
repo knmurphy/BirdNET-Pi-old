@@ -73,12 +73,12 @@ export function InfoScreen() {
           </p>
           <div className="screen__error-actions">
             {isSystemError && (
-              <button onClick={() => refetchSystem()} className="button button--primary">
+              <button onClick={() => refetchSystem()} className="primary">
                 Retry System
               </button>
             )}
             {isSettingsError && (
-              <button onClick={() => refetchSettings()} className="button button--primary">
+              <button onClick={() => refetchSettings()} className="primary">
                 Retry Settings
               </button>
             )}
@@ -175,7 +175,7 @@ export function InfoScreen() {
               )}
             </div>
             <div className="settings-coords">
-              <span>{settings.latitude.toFixed(4)}°N, {settings.longitude.toFixed(4)}°W</span>
+              <span>{Math.abs(settings.latitude).toFixed(4)}°{settings.latitude >= 0 ? 'N' : 'S'}, {Math.abs(settings.longitude).toFixed(4)}°{settings.longitude >= 0 ? 'E' : 'W'}</span>
             </div>
             <div className="settings-grid">
               <div className="settings-item">

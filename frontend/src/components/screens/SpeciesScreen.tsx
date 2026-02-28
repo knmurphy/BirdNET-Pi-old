@@ -103,7 +103,13 @@ export function SpeciesScreen() {
 
         {!isLoading && !isError && sortedSpecies.length === 0 && (
           <div className="species-list__empty">
-            <div className="screen__icon">🐦</div>
+            <div className="screen__icon" aria-hidden="true">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 12c2-2 5-5 9-5s7 3 9 5" />
+                <path d="M3 12c2 2 5 5 9 5s7-3 9-5" />
+                <circle cx="9" cy="12" r="2.5" />
+              </svg>
+            </div>
             <p className="screen__text">No species detected today</p>
             <p className="screen__hint">
               Detections will appear here as birds are identified

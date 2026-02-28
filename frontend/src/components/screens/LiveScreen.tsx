@@ -70,7 +70,14 @@ function DetectionSkeleton({ count = 3 }: { count?: number }) {
 function EmptyState() {
 	return (
 		<div className="screen__placeholder">
-			<div className="screen__icon">◉</div>
+			<div className="screen__icon" aria-hidden>
+				<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+					<path d="M12 2a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3Z" />
+					<path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+					<line x1="12" y1="19" x2="12" y2="22" />
+					<line x1="8" y1="22" x2="16" y2="22" />
+				</svg>
+			</div>
 			<h2 className="screen__title">No detections yet today</h2>
 			<p className="screen__hint">
 				Detections will appear here in real-time as they're classified
@@ -85,7 +92,13 @@ function EmptyState() {
 function ErrorState({ message }: { message: string }) {
 	return (
 		<div className="screen__placeholder">
-			<div className="screen__icon" style={{ color: 'var(--red)' }}>⚠</div>
+			<div className="screen__icon" style={{ color: 'var(--red)' }} aria-hidden>
+				<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+					<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+					<path d="M12 9v4" />
+					<path d="M12 17h.01" />
+				</svg>
+			</div>
 			<h2 className="screen__title">Failed to load detections</h2>
 			<p className="screen__hint">{message}</p>
 		</div>
@@ -95,9 +108,16 @@ function ErrorState({ message }: { message: string }) {
 export function LiveScreen() {
 	const { detections, isLoading, isError, error } = useLiveDetections();
 	const [newDetectionIds, setNewDetectionIds] = useState<Set<number>>(new Set());
+	const [tick, setTick] = useState(0);
 	const seenIdsRef = useRef<Set<number>>(new Set());
 
 	const mostRecentDetections = detections.slice(0, 4);
+
+	// Recalculate age categories every 60s so dimming updates without re-render
+	useEffect(() => {
+		const id = setInterval(() => setTick((t) => t + 1), 60_000);
+		return () => clearInterval(id);
+	}, []);
 
 	// Track new detections for animation
 	useEffect(() => {
@@ -128,8 +148,8 @@ export function LiveScreen() {
 		};
 	}, [detections]);
 
-	// Limit rendered detections for performance
-	const visibleDetections = detections.slice(0, MAX_VISIBLE_DETECTIONS);
+	// Activity excludes top 4 (shown in Most Recent); limit for performance
+	const activityDetections = detections.slice(4, 4 + MAX_VISIBLE_DETECTIONS);
 
 	// Loading state - show skeletons
 	if (isLoading && detections.length === 0) {
@@ -161,7 +181,7 @@ export function LiveScreen() {
 	}
 
 	return (
-		<div className="screen screen--live">
+		<div className="screen screen--live" data-age-tick={tick}>
 			{/* Today Header */}
 			<div className="live-header">
 				<h1 className="live-header__title">Today</h1>
@@ -189,7 +209,7 @@ export function LiveScreen() {
 			<section className="live-activity">
 				<h2 className="live-activity__title">Activity</h2>
 				<div className="live-feed" role="feed" aria-label="Live detection feed">
-					{visibleDetections.map((detection) => (
+					{activityDetections.map((detection) => (
 						<DetectionCard
 							key={detection.id}
 							detection={detection}
@@ -199,10 +219,10 @@ export function LiveScreen() {
 					))}
 				</div>
 
-				{/* Show count indicator if we have more detections than shown */}
-				{detections.length > MAX_VISIBLE_DETECTIONS && (
+				{/* Show count indicator if more detections exist beyond Most Recent + visible */}
+				{detections.length > 4 + MAX_VISIBLE_DETECTIONS && (
 					<div className="live-feed__overflow">
-						+{detections.length - MAX_VISIBLE_DETECTIONS} more today
+						+{detections.length - 4 - MAX_VISIBLE_DETECTIONS} more today
 					</div>
 				)}
 			</section>

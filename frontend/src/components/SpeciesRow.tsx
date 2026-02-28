@@ -134,6 +134,7 @@ export function SpeciesRow({ species, isNew, onClick, chartData, onOpenChart, on
         isOpen={isChartActive}
         onClose={handleCloseChart}
         species={activeChartData}
+        onDaysChange={setLocalChartData}
       />
     </>
   );

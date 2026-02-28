@@ -184,6 +184,7 @@ export function SpeciesCard({
         isOpen={isChartActive}
         onClose={handleCloseChart}
         species={activeChartData}
+        onDaysChange={setLocalChartData}
       />
     </>
   );
